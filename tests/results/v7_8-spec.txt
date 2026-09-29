@@ -1,0 +1,274 @@
+✔ [BL-SD-01] SD สองฝั่งใกล้กัน (ต่าง 0.10) → ความเห็นตรงกัน (1.12333ms)
+✔ [BL-SD-02] SD นักวิจารณ์ต่ำกว่าชัดเจน → เชื่อฝั่งนักวิจารณ์ (0.252078ms)
+✔ [BL-SD-03] SD คนดูต่ำกว่าชัดเจน → เชื่อฝั่งคนดู (0.096105ms)
+✔ [BL-SD-04] ขาด SD นักวิจารณ์ → ใช้ Genre_Critics_SD แทนแล้วเทียบ + แจ้ง note (0.244743ms)
+✔ [BL-SD-05] ขาด SD คนดู → ใช้ Genre_Audience_SD แทน (0.116074ms)
+✔ [BL-SD-06] Overall_SD ≥ 1.50 → ภาพยนตร์เฉพาะกลุ่ม (มีลำดับความสำคัญเหนือการเทียบฝั่ง) (0.093365ms)
+✔ [BL-SD-07] Overall_SD ≥ 1.5 เท่าของ S.D. ประเภท → เฉพาะกลุ่ม แม้ต่ำกว่า 1.50 (0.091785ms)
+✔ [BL-SD-08] Overall_SD 1.49 และไม่มีค่าประเภท → ไม่ถือว่าเฉพาะกลุ่ม (0.139661ms)
+✔ [BL-SD-09] ไม่มีข้อมูล SD เลย → ขาดข้อมูลในการตัดสินใจ (0.090482ms)
+✔ [BL-SD-10] มีข้อมูลฝั่งเดียวและไม่มีค่าประเภท → ชี้ไปฝั่งที่มีข้อมูล พร้อม note (0.085408ms)
+✔ [BL-SD-11] (Midterm TC4) ประเภทที่มีหนังเรื่องเดียว คำนวณ SD ไม่ได้ (null) → ไม่ error และแจ้งขาดข้อมูล (0.175765ms)
+✔ [BL-SD-12] SD = 0 ทั้งสองฝั่ง ถือเป็นข้อมูลจริง (ไม่ใช่ขาดข้อมูล) → ตรงกัน (1.533499ms)
+✔ [BL-SD-13] แปลงค่าจากฐานข้อมูล: 'N/A', '', null → null ; '0.35' → 0.35 ; 0 → 0 (0.21999ms)
+✖ [BL-SD-14] ขอบเขตพอดี: ต่างกัน 0.15 (0.30 vs 0.45) ต้องนับว่า 'ตรงกัน' ตามกติกา 'ไม่เกิน 0.15' (1.162017ms)
+✖ [BL-SD-15] ขอบเขตพอดีทุกคู่ค่า 2 ตำแหน่ง (0.00–2.00) ที่ต่างกัน 0.15 ต้องได้ 'ตรงกัน' ทุกคู่ (0.689805ms)
+✔ [BL-SD-16] Property test 20,000 ชุดสุ่ม: ไม่ throw และผลลัพธ์อยู่ในชุดคำตอบที่กำหนดเท่านั้น (5 ข้อความ) (23.893223ms)
+[BL-FL-01] scenarios=252 expected=41286 queries=845 reads=41294 indexErrors=0 votesOrder=0/13986
+[BL-FL-02] scenarios=252 expected=41286 queries=974 reads=57176 indexErrors=249 votesOrder=13/13986
+✔ [BL-FL-01] ทุกชุดฟิลเตอร์ 7×4×3 × การเรียง 3 แบบ (มี composite index): ครบ ไม่ซ้ำ ไม่หลุดเงื่อนไข หน้าแรกไม่ว่าง (9236.804785ms)
+✔ [BL-FL-02] ทุกชุดฟิลเตอร์ 7×4×3 × การเรียง 3 แบบ (ไม่มี composite index): ครบ ไม่ซ้ำ ไม่หลุดเงื่อนไข หน้าแรกไม่ว่าง (5288.199591ms)
+✔ [BL-FL-03] โหมด Genres แบบ array (หลายประเภทต่อเรื่อง) + Year + Type: ผลตรงกับ oracle (150.909576ms)
+✔ [BL-FL-04] (Midterm TC8) ฟิลเตอร์ที่ไม่มีหนังเลย → คืนผลว่างและ done=true ไม่ error (5.201815ms)
+✔ [BL-FL-05] passesFilters ทำงานแบบ AND: ผ่านครบทุกเงื่อนไขเท่านั้น (0.204611ms)
+✔ [BL-FL-06] (Midterm TC2) Genre_for_cal คำเดียวไม่มี comma → ใช้ค่าเดิมทั้งหมด (0.353461ms)
+[BL-TR-03] fallback page: 40 titles, 17 older than 2024 (year window not enforced in fallback)
+✔ [BL-TR-01] Trending now: ไล่ปี 2026→2025→2024, ในแต่ละปีเรียง Popularity มาก→น้อย, ตัด Popularity < 10 — ลำดับตรงกับ oracle ทุกตำแหน่ง (125.909229ms)
+✔ [BL-TR-02] Trending + Genre + Type (มี composite index) → ลำดับตรงกับ oracle (56.1732ms)
+✔ [BL-TR-03] Trending + Genre แต่ไม่มี composite index → ถอยไปเรียง Popularity ทั้งฐานข้อมูล (ผลยังผ่านฟิลเตอร์ครบ) (40.979534ms)
+✔ [BL-TR-04] เลือกปีเอง หรือค้นหาอยู่ → ไม่ใช้โหมดไล่ปี (0.140578ms)
+✔ [BL-SE-01] จัดอันดับผลค้นหา: ชื่อตรงคำค้นมาก่อน แล้วเรียง imdbVotes มาก→น้อย (34.114473ms)
+✔ [BL-SE-02] ค้นภาษาไทย: ตัดวรรณยุกต์ก่อนเทียบ ('โอดิสซี่' = 'โอดิสซี') (0.866443ms)
+✔ [BL-SE-03] ค้นหา (Firestore fallback เมื่อ Algolia ใช้ไม่ได้): พิมพ์ตัวเล็กก็เจอ ผลขึ้นต้นด้วยคำค้น และผ่านฟิลเตอร์ที่เลือก (46.647876ms)
+✔ [BL-SE-04] ค้นหาคำที่ไม่มีในฐานข้อมูล → ผลว่าง ไม่ error (44.59234ms)
+[BL-HR-03] pool=72 (criteria: poster, 2022–2026, votes ≥ 20000)
+✔ [BL-HR-01] สุ่ม Hero 10,000 ครั้ง: ไม่มีเรื่องเดิมติดกันเลย และทุกเรื่องได้ขึ้นภายใน 2 รอบสำรับ (68.179835ms)
+✔ [BL-HR-02] รีเฟรชหน้า (อ่านสำรับที่เหลือจาก localStorage): ไม่ได้เรื่องล่าสุดซ้ำ และไม่ซ้ำเรื่องที่แสดงไปแล้วในรอบนี้ (0.8337ms)
+✔ [BL-HR-03] pool ของ Hero: มีโปสเตอร์ ออกใน 5 ปีล่าสุด และโหวต ≥ 20,000 (ผ่อนเกณฑ์เมื่อได้ไม่ถึง 20 เรื่อง) (109.964156ms)
+✔ [BL-HR-04] กดฟิลเตอร์กี่ครั้งก็ไม่ทำให้ Hero เปลี่ยน (Hero แยกจากฟิลเตอร์) (23.168561ms)
+✔ [BL-DP-01] ชื่อไทยในหน้า detail: ไม่มีชื่อไทย หรือสะกดเหมือนชื่ออังกฤษ → ซ่อน (0.129448ms)
+✖ [BL-DP-02] ชื่อไทยต่างกันแค่ตัวพิมพ์/ช่องว่าง ('dune ' vs 'Dune') → ต้องซ่อนเหมือนกัน (0.995328ms)
+✔ [BL-DP-03] ชื่ออังกฤษ: ตัดวงเล็บชื่อไทย/ชื่อซ้ำออก (0.20604ms)
+✖ [BL-DP-04] ชื่ออังกฤษที่มีวงเล็บเป็นส่วนหนึ่งของชื่อจริง ต้องไม่ถูกตัด (0.29028ms)
+✖ [BL-DP-05] จำนวนโหวต: 999 / 12K / 1M / 1.3M และ 999,999 ต้องแสดง 1M ไม่ใช่ 1000K (0.193918ms)
+✔ [BL-DP-06] แปลงตัวเลขจากข้อความ: '1,234,567' '85%' 'N/A' และปีของซีรีส์ '2019–2023' (0.167812ms)
+✔ [BL-DP-07] Keyword รองรับทั้ง Array และข้อความคั่นด้วย , | / ; (0.29104ms)
+✖ [SEC-01] การ์ดหนัง: ค่า Poster ที่มีเครื่องหมายคำพูด ต้องไม่หลุดออกจาก attribute (กัน HTML injection) (0.269144ms)
+✔ [SEC-02] ข้อความชื่อหนังถูก escape ก่อนใส่ HTML (0.142017ms)
+[AI-SM-03] shown=5 sameEra=4
+✔ [AI-SM-01] คะแนนความใกล้เคียง: keyword / ประเภท / ยุคสมัย (1.62966ms)
+✔ [AI-SM-02] LLM ตอบ id ที่ไม่มีจริง → ถูกตัดทิ้ง, ได้ไม่เกิน 6 เรื่อง (52.021272ms)
+✔ [AI-SM-03] LLM เลือกหนังต่างยุคมาเกินครึ่ง → ระบบสลับเป็นหนังยุคเดียวกันให้เหลือ ≥ 4 ใน 6 เรื่อง (37.424124ms)
+✔ [AI-SM-04] LLM ใช้ไม่ได้ → ใช้การจัดอันดับสำรอง (keyword/ประเภท/ยุค) และบอกผู้ใช้ (33.868802ms)
+✔ [AI-CB-01] Prompt ส่ง Gemini: role สลับ user/model เสมอ เริ่มและจบด้วย user (property test 2,000 ประวัติสุ่ม) (7.037356ms)
+✔ [AI-CB-02] ตอบ JSON ขาดท้าย (ยาวจนโดนตัด) → ยังดึงข้อความ reply ออกมาได้ (1.927704ms)
+✔ [AI-CB-03] (Midterm TC9 ฉบับปรับ) บอทแนะนำได้เฉพาะหนังที่อยู่ใน DATABASE_CANDIDATES — id ที่แต่งขึ้นถูกตัด และแสดงไม่เกิน 3 เรื่อง (37.506449ms)
+✔ [AI-CB-04] ถามว่า 'เรื่องนี้' ตอนไม่ได้เปิดหนังอยู่ → บังคับเป็นโหมดคุยทั่วไป ไม่แนบหนังมั่ว (17.787542ms)
+✔ [AI-CB-05] เปิดหน้าหนังอยู่ → Prompt แนบข้อมูลหนังจริง (คะแนน, S.D., Recommend side) ตัวเลขตรงฐานข้อมูล และระบุเมื่อใช้ค่าเฉลี่ยประเภท (25.221707ms)
+✔ [AI-CB-06] Gemini ล่ม → โหมดออฟไลน์สรุปจากข้อมูลจริงของหนังที่เปิดอยู่ (18.771278ms)
+✔ [AI-CB-07] System prompt มีกติกากันแต่งข้อมูล (ตัวเลขต้องตรงข้อมูล, ระบุเมื่อใช้ความรู้ทั่วไป, picks ต้องมาจากฐานข้อมูล) (0.115186ms)
+✔ [SW-RS-01] สร้าง structuredQuery: หลายเงื่อนไขเป็น AND, ค่า Year เป็น string, orderBy ต่อท้าย __name__ ตามทิศเดียวกัน (3.058022ms)
+✔ [SW-RS-02] ชื่อฟิลด์ที่มีอักขระพิเศษถูกครอบ backtick, cursor จาก snapshot ใช้ค่าทุกฟิลด์ที่เรียง (0.476644ms)
+✔ [SW-RS-03] แปลงค่า Firestore ไป-กลับครบทุกชนิด (int/double/string/bool/null/array/map) (0.34673ms)
+✔ [SW-FM-01] กดฟิลเตอร์รัว ๆ (request เก่าช้ากว่า) → จอแสดงผลของฟิลเตอร์ล่าสุดเท่านั้น และปลดสถานะ loading (81.428268ms)
+Firestore error: Error: Firestore timeout
+    at file:///home/claude/work/tests/test/06-rest-and-fetch.test.mjs:114:36
+    at getDocs (file:///home/claude/work/tests/cinemeter-logic-v7_8.mjs:11:36)
+    at queryFiltered (file:///home/claude/work/tests/cinemeter-logic-v7_8.mjs:956:44)
+    at loadRanked (file:///home/claude/work/tests/cinemeter-logic-v7_8.mjs:1071:31)
+    at async Module.fetchMovies (file:///home/claude/work/tests/cinemeter-logic-v7_8.mjs:1209:30)
+    at async TestContext.<anonymous> (file:///home/claude/work/tests/test/06-rest-and-fetch.test.mjs:116:3)
+    at async Test.run (node:internal/test_runner/test:1054:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+✔ [SW-FM-02] เปลี่ยนฟิลเตอร์ 12 ครั้งติดกันแบบสุ่มหน่วงเวลา → สถานะสุดท้ายตรงกับฟิลเตอร์ครั้งสุดท้ายเสมอ (ทำซ้ำ 20 รอบ) (1280.349017ms)
+✔ [SW-FM-03] เลือกฟิลเตอร์เดิมซ้ำภายใน 5 นาที → แสดงจากแคชทันที ไม่ยิง query ใหม่ (31.148988ms)
+✔ [SW-FM-04] (Midterm TC5) โหลดหน้าถัดไปหลายครั้ง → ไม่มีหนังซ้ำในรายการ (176.624056ms)
+✔ [SW-FM-05] (Midterm TC7) ข้อมูลหมดแล้ว (exhausted) → กดโหลดเพิ่มไม่ยิง query และปุ่มถูกซ่อน (3.663765ms)
+✔ [SW-FM-06] (Midterm TC8) ฟิลเตอร์ไม่พบหนัง → ข้อความ 'ไม่พบผลลัพธ์' ไม่ใช่หน้าว่าง/ error (2.913973ms)
+✔ [SW-FM-07] ฐานข้อมูลตอบ error → แสดงข้อความโหลดไม่สำเร็จ และปลด loading (28.316995ms)
+✖ [RB-01] ถ้าคะแนนที่ไม่มีข้อมูลถูกเก็บเป็นข้อความ 'N/A' (ไม่ใช่ลบฟิลด์) → หมวด Loved by critics หน้าแรกต้องยังมีหนัง (77.310355ms)
+✔ [RB-02] Year เก็บเป็นตัวเลขแทนข้อความ → ฟิลเตอร์ปีฝั่ง client ยังถูกต้อง (0.320789ms)
+✔ [RB-03] หนังไม่มีโปสเตอร์/เรื่องย่อ/นักแสดง → การ์ดและ prompt ไม่ error (0.54987ms)
+✔ [RB-04] (Midterm TC1) หนังไม่มี Metascore หรือ RT → ไม่นับเป็น 0: แสดง N/A และ Recommend side ยังตัดสินได้ (0.241964ms)
+[BL-HG-01] set A=57 set B=56 overlap=0
+[BL-RN-01] 300 random draws → distinct first titles=1, empty=38
+✔ [BL-HG-01] Hidden gems: คะแนนคนดู > 7.5 และ (โหวต < 50,000 หรือ popularity < 20) และสุ่มชุดใหม่ทุกครั้ง (71.693817ms)
+✔ [BL-HG-02] Hidden gems + ฟิลเตอร์ Genre/Year (ไม่มี composite index) → ยังได้ผลที่ผ่านทุกเงื่อนไข (47.443621ms)
+✔ [BL-GA-01] อ่าน S.D. ระดับประเภทจาก GENRE_ANALYSIS (มีแคช) และคืน null เมื่อไม่มีประเภทนั้น (39.97058ms)
+✔ [BL-SE-05] Algolia: ค้นคำกลางชื่อได้ ผลที่ชื่อตรงมาก่อนและเรียงตามโหวต, มีฟิลเตอร์ → ไล่หลายหน้าจนได้ผลพอ (48.0305ms)
+✔ [BL-SE-06] Algolia ค้นไทยมีวรรณยุกต์ไม่เจอ → ลองใหม่แบบตัดวรรณยุกต์อัตโนมัติ (34.001689ms)
+✔ [BL-SE-07] Algolia ล่ม → ถอยไปค้นด้วย Firestore อัตโนมัติ (ผู้ใช้ยังค้นเจอ) (38.201246ms)
+✔ [AI-CB-08] แผนค้นฐานข้อมูลของแชทบอท mode=top: ได้หนังตรงเงื่อนไข ไม่เกิน 20 เรื่อง (57.274249ms)
+✔ [AI-CB-09] แผนค้นฐานข้อมูลของแชทบอท mode=title: ได้หนังตรงเงื่อนไข ไม่เกิน 20 เรื่อง (38.834687ms)
+✔ [AI-CB-10] แผนค้นฐานข้อมูลของแชทบอท mode=discovery: ได้หนังตรงเงื่อนไข ไม่เกิน 20 เรื่อง (38.350084ms)
+✔ [AI-CB-11] แผนค้นฐานข้อมูลของแชทบอท mode=genre: ได้หนังตรงเงื่อนไข ไม่เกิน 20 เรื่อง (31.711738ms)
+✔ [AI-CB-12] mode=similar ขณะเปิดหนังอยู่ → ไม่แนะนำหนังเรื่องเดิม (37.686785ms)
+✔ [SW-FM-08] ค้นหาผ่าน fetchMovies: หัวข้อและผลลัพธ์เป็นของคำค้น (36.138472ms)
+✖ [BL-RN-01] สุ่มหนังจาก documentId (ใช้ตอน AI ออฟไลน์/หาไม่เจอ) ต้องกระจายทั่วฐานข้อมูล ไม่ได้ชุดเดิมซ้ำ (3390.876773ms)
+ℹ tests 81
+ℹ suites 0
+ℹ pass 73
+ℹ fail 8
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 22046.832069
+ℹ start of coverage report
+ℹ ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ file                     | line % | branch % | funcs % | uncovered lines
+ℹ ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ cinemeter-logic-v7_8.mjs |  96.46 |    82.73 |   89.71 | 70 87 121-123 361 523 594-595 612-614 664-674 792-794 817-820 1101-1108 1110-1125 1377-1381 1621-1625 1652-1654 1731-1733 1953-1955
+ℹ ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ all files                |  96.46 |    82.73 |   89.71 | 
+ℹ ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ end of coverage report
+
+✖ failing tests:
+
+test at test/01-recommend-side.test.mjs:65:1
+✖ [BL-SD-14] ขอบเขตพอดี: ต่างกัน 0.15 (0.30 vs 0.45) ต้องนับว่า 'ตรงกัน' ตามกติกา 'ไม่เกิน 0.15' (1.162017ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'เชื่อฝั่งนักวิจารณ์'
+  - 'คนดูและนักวิจารณ์ความเห็นตรงกัน'
+  
+      at TestContext.<anonymous> (file:///home/claude/work/tests/test/01-recommend-side.test.mjs:67:10)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1047:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+      at Test.postRun (node:internal/test_runner/test:1173:19)
+      at Test.run (node:internal/test_runner/test:1101:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'เชื่อฝั่งนักวิจารณ์',
+    expected: 'คนดูและนักวิจารณ์ความเห็นตรงกัน',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/01-recommend-side.test.mjs:69:1
+✖ [BL-SD-15] ขอบเขตพอดีทุกคู่ค่า 2 ตำแหน่ง (0.00–2.00) ที่ต่างกัน 0.15 ต้องได้ 'ตรงกัน' ทุกคู่ (0.689805ms)
+  AssertionError [ERR_ASSERTION]: 186 จาก 372 คู่ถูกจัดผิดฝั่ง เช่น 0.02/0.17, 0.17/0.02, 0.05/0.2, 0.2/0.05, 0.08/0.23, 0.23/0.08
+  
+  186 !== 0
+  
+      at TestContext.<anonymous> (file:///home/claude/work/tests/test/01-recommend-side.test.mjs:77:10)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1047:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+      at Test.postRun (node:internal/test_runner/test:1173:19)
+      at Test.run (node:internal/test_runner/test:1101:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 186,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/04-hero-display.test.mjs:70:1
+✖ [BL-DP-02] ชื่อไทยต่างกันแค่ตัวพิมพ์/ช่องว่าง ('dune ' vs 'Dune') → ต้องซ่อนเหมือนกัน (0.995328ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  'dune ' !== ''
+  
+      at TestContext.<anonymous> (file:///home/claude/work/tests/test/04-hero-display.test.mjs:71:10)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1047:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+      at Test.postRun (node:internal/test_runner/test:1173:19)
+      at Test.run (node:internal/test_runner/test:1101:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'dune ',
+    expected: '',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/04-hero-display.test.mjs:79:1
+✖ [BL-DP-04] ชื่ออังกฤษที่มีวงเล็บเป็นส่วนหนึ่งของชื่อจริง ต้องไม่ถูกตัด (0.29028ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'Days of Summer'
+  - '(500) Days of Summer'
+  
+      at TestContext.<anonymous> (file:///home/claude/work/tests/test/04-hero-display.test.mjs:80:10)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1047:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+      at Test.postRun (node:internal/test_runner/test:1173:19)
+      at Test.run (node:internal/test_runner/test:1101:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'Days of Summer',
+    expected: '(500) Days of Summer',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/04-hero-display.test.mjs:83:1
+✖ [BL-DP-05] จำนวนโหวต: 999 / 12K / 1M / 1.3M และ 999,999 ต้องแสดง 1M ไม่ใช่ 1000K (0.193918ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  '1000K' !== '1M'
+  
+      at TestContext.<anonymous> (file:///home/claude/work/tests/test/04-hero-display.test.mjs:88:10)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1047:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+      at Test.postRun (node:internal/test_runner/test:1173:19)
+      at Test.run (node:internal/test_runner/test:1101:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '1000K',
+    expected: '1M',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/04-hero-display.test.mjs:104:1
+✖ [SEC-01] การ์ดหนัง: ค่า Poster ที่มีเครื่องหมายคำพูด ต้องไม่หลุดออกจาก attribute (กัน HTML injection) (0.269144ms)
+  AssertionError [ERR_ASSERTION]: 
+                  <img src="x.jpg" onload="alert(1)"
+                       alt="T" loading="lazy"
+                       onerror="this.src='https://via.placeholder.
+      at TestContext.<anonymous> (file:///home/claude/work/tests/test/04-hero-display.test.mjs:106:10)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1047:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+      at Test.postRun (node:internal/test_runner/test:1173:19)
+      at Test.run (node:internal/test_runner/test:1101:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test/07-robustness.test.mjs:7:1
+✖ [RB-01] ถ้าคะแนนที่ไม่มีข้อมูลถูกเก็บเป็นข้อความ 'N/A' (ไม่ใช่ลบฟิลด์) → หมวด Loved by critics หน้าแรกต้องยังมีหนัง (77.310355ms)
+  AssertionError [ERR_ASSERTION]: หน้าแรกว่าง → ผู้ใช้เห็น 'ไม่พบผลลัพธ์' ทั้งที่มีหนังคะแนนนักวิจารณ์ 1110 เรื่อง
+      at TestContext.<anonymous> (file:///home/claude/work/tests/test/07-robustness.test.mjs:13:10)
+      at async Test.run (node:internal/test_runner/test:1054:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test/08-gems-search-chatplans.test.mjs:127:1
+✖ [BL-RN-01] สุ่มหนังจาก documentId (ใช้ตอน AI ออฟไลน์/หาไม่เจอ) ต้องกระจายทั่วฐานข้อมูล ไม่ได้ชุดเดิมซ้ำ (3390.876773ms)
+  AssertionError [ERR_ASSERTION]: ได้หนังเรื่องแรกไม่ซ้ำกันแค่ 1 แบบจากการสุ่ม 300 ครั้ง
+      at TestContext.<anonymous> (file:///home/claude/work/tests/test/08-gems-search-chatplans.test.mjs:136:10)
+      at async Test.run (node:internal/test_runner/test:1054:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
