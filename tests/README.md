@@ -11,7 +11,7 @@
 cd tests
 ./run-tests.sh v7_8     # ก่อนแก้: ผ่าน 73/81
 ./run-tests.sh v7_9     # ส่งมอบ: ผ่าน 81/81
-python3 make-v7_9.py ../cinemeter-v7_8.html ../cinemeter-v7_9.html   # สร้าง v7_9 จาก v7_8 ใหม่ (แก้ 9 จุด)
+python3 make-v7_9.py ../cinemeter-v7_8.html ../cinemeter-v7_9.html   # สร้าง v7_9 จาก v7_8 ใหม่ (แก้ 9 จุด + ย้าย Gemini key ไป Cloud Function 3 จุด)
 ```
 
 ผลอยู่ใน `results/`: `*-spec.txt` (อ่านง่าย + coverage), `*-junit.xml`, `test-table.md`, ภาพ smoke test
@@ -25,6 +25,6 @@ python3 make-v7_9.py ../cinemeter-v7_8.html ../cinemeter-v7_9.html   # สร้
 | `helpers/fake-firestore.mjs` | Firestore จำลอง (เทียบชนิดข้อมูลเข้มงวด, error เมื่อไม่มี composite index) |
 | `helpers/dataset.mjs` | ข้อมูลสังเคราะห์รูปแบบเดียวกับ MOVIES |
 | `helpers/dom-stub.mjs` | DOM จำลองสำหรับฟังก์ชันที่แตะหน้าจอ |
-| `make-v7_9.py` | แพตช์แก้บั๊กที่พบ (แต่ละจุดต้องเจอแค่ครั้งเดียว) |
+| `make-v7_9.py` | แพตช์แก้บั๊กที่พบ + เปลี่ยนแชทบอทให้เรียก Gemini ผ่าน Cloud Function (แต่ละจุดต้องเจอแค่ครั้งเดียว) |
 | `smoke.py` | เปิดทั้งสองเวอร์ชันใน Chromium ตรวจ JavaScript error |
 | `build-check-page.mjs`, `check-page/` | สร้างหน้า `cinemeter-live-check.html` และทดสอบหน้านั้นกับบริการจำลอง |

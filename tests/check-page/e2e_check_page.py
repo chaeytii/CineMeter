@@ -143,7 +143,7 @@ async def handle(route):
             hits.sort(key=lambda m: -m.get("imdbVotes", 0))
             per, page = b.get("hitsPerPage", 20), b.get("page", 0)
             return await route.fulfill(status=200, content_type="application/json", body=json.dumps({"hits": hits[page*per:(page+1)*per], "nbHits": len(hits), "page": page, "nbPages": max(1, -(-len(hits)//max(per, 1)))}))
-        if "generativelanguage.googleapis.com" in url:
+        if "generativelanguage.googleapis.com" in url or "cloudfunctions.net/gemini" in url:
             STATS["gemini"] += 1
             b = json.loads(req.post_data); text = b["contents"][-1]["parts"][0]["text"]
             cur = re.search(r'"criticsAverage":([\d.]+).*?"audienceAverage":([\d.]+)', text)

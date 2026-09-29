@@ -1,0 +1,12 @@
+# ห้ามขึ้น GitHub: key / รหัสลับ
+.env
+.env.*
+*serviceAccount*.json
+*service-account*.json
+*-firebase-adminsdk-*.json
+
+# สร้างใหม่ได้เอง
+node_modules/
+data.json
+firebase-debug.log
+tests/cinemeter-logic-*

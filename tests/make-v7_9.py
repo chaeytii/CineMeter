@@ -43,6 +43,17 @@ PATCHES = [
      "                        detectSchema(snap.docs.map(d => d.data()));\n",
      "                        detectSchema(snap.docs.map(d => d.data()));\n"
      "                        idLooksImdb = snap.docs.every(d => /^tt\\d{7,8}$/.test(d.id));\n"),
+    # ไม่ใช่บั๊กจากเทสต์: ย้าย Gemini API key ออกจากหน้าเว็บไปไว้ใน Cloud Function (functions/)
+    ("KEY-01 Gemini key via Cloud Function (config)",
+     '        const GEMINI_API_KEY = ""; // เอารหัสออกแล้ว (เวอร์ชันเก่า เก็บไว้เทียบผลเทสต์เท่านั้น)',
+     "        // แชทบอทเรียก Gemini ผ่าน Firebase Cloud Function (functions/) ซึ่งเก็บ API key ไว้ฝั่ง server — ในหน้าเว็บจึงไม่มี key\n"
+     '        const GEMINI_PROXY = "https://asia-southeast1-movie-858f6.cloudfunctions.net/gemini";'),
+    ("KEY-01 Gemini key via Cloud Function (url)",
+     "const GEMINI_URL = m => `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`;",
+     "const GEMINI_URL = m => `${GEMINI_PROXY}/models/${m}:generateContent`;"),
+    ("KEY-01 Gemini key via Cloud Function (header)",
+     'headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },',
+     'headers: { "Content-Type": "application/json" },'),
 ]
 for name, old, new in PATCHES:
     n = src.count(old)
