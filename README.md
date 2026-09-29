@@ -12,9 +12,11 @@
 | ไฟล์ / โฟลเดอร์ | คืออะไร |
 |---|---|
 | `index.html` | ตัวเว็บที่ GitHub Pages เปิด (เหมือน `cinemeter-v7_9.html` ทุกตัวอักษร) |
-| `cinemeter-v7_9.html` | เวอร์ชันส่งมอบ แก้จุดผิด 7 จุดที่ชุดทดสอบพบแล้ว |
+| `cinemeter-v7_9.html` | เวอร์ชันส่งมอบ แก้จุดผิด 7 จุดที่ชุดทดสอบพบแล้ว และเรียก Gemini ผ่าน Cloud Function (ไม่มี API key ในหน้าเว็บ) |
 | `cinemeter-v7_8.html` | เวอร์ชันก่อนแก้ เก็บไว้ให้ชุดทดสอบเทียบก่อน–หลัง |
 | `cinemeter-live-check.html` | หน้าตรวจข้อมูลจริง: สุ่มหนังจากฐานข้อมูล คำนวณคะแนนซ้ำ แล้วเทียบกับค่าที่เก็บไว้ (อ่านอย่างเดียว ไม่แก้ข้อมูล) |
+| `functions/` | Firebase Cloud Function `gemini`: ตัวกลางที่ถือ Gemini API key ไว้ฝั่ง server แชทบอทบนเว็บเรียกผ่านตัวนี้ (รับเฉพาะเว็บของเรา, จำกัดรุ่นโมเดล/ความยาว/จำนวนครั้งต่อนาที) |
+| `firebase.json`, `.firebaserc` | ตั้งค่าให้คำสั่ง `firebase deploy` รู้ว่าจะ deploy `functions/` ขึ้นโปรเจกต์ `movie-858f6` |
 | `tests/` | ชุดทดสอบอัตโนมัติ 81 ข้อ และผลการทดสอบใน `tests/results/` |
 
 ## ผลการทดสอบ
@@ -36,11 +38,29 @@ cd tests
 ./run-tests.sh v7_9     # ส่งมอบ: ผ่าน 81/81
 ```
 
+## Deploy แชทบอท (Cloud Function)
+
+ทำครั้งแรกครั้งเดียว ต้องมี Node.js 22 และโปรเจกต์ Firebase เป็นแผน Blaze
+
+```bash
+npm install -g firebase-tools
+firebase login
+cd functions && npm install && cd ..
+firebase functions:secrets:set GEMINI_API_KEY   # วาง Gemini API key ตอนถูกถาม — key อยู่ใน Google Secret Manager ไม่อยู่ในไฟล์ใด ๆ
+firebase deploy --only functions
+```
+
+ถ้า URL ที่ได้หลัง deploy ไม่ใช่ `https://asia-southeast1-movie-858f6.cloudfunctions.net/gemini` ให้แก้ค่า `GEMINI_PROXY` ใน `index.html`
+เปลี่ยน key ภายหลัง: รัน `firebase functions:secrets:set GEMINI_API_KEY` แล้ว `firebase deploy --only functions` อีกครั้ง
+ทดสอบตัวกลาง: `cd functions && npm test`
+
+> ห้ามใส่ API key หรือไฟล์ service account ลงในไฟล์ที่ขึ้น GitHub — `.gitignore` กันไฟล์ `.env` และ `*serviceAccount*.json` ไว้แล้ว
+
 ## ระบบที่ใช้
 
 - **Firebase Firestore** — ฐานข้อมูลหนัง 72,759 เรื่อง (ปี 1980–2026)
 - **Algolia** — ช่องค้นหา (พิมพ์ผิดหรือพิมพ์ไม่ครบก็ยังเจอ)
-- **Google Gemini** — แชทบอทและหมวด "If you like…"
+- **Google Gemini** — แชทบอทและหมวด "If you like…" (เรียกผ่าน Firebase Cloud Functions)
 
 ## แหล่งข้อมูล
 

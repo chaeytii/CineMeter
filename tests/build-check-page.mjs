@@ -8,7 +8,7 @@ const cur = scriptOf(readFileSync(newPath, "utf8"));
 const old = scriptOf(readFileSync(oldPath, "utf8"));
 const NAMES = ["firebaseConfig", "FS_BASE", "FS_TIMEOUT_MS", "DOC_ID", "db", "documentId", "collection", "doc", "where", "orderBy", "limit",
   "startAt", "startAfter", "endAt", "query", "OP_MAP", "toFsValue", "fromFsValue", "fromFsFields", "fieldRef", "makeSnapshot", "fsFetch",
-  "cursorValues", "buildStructuredQuery", "getDocs", "getDoc", "GEMINI_API_KEY", "GEMINI_PRIMARY_MODEL", "GEMINI_FALLBACK_MODELS", "ALGOLIA",
+  "cursorValues", "buildStructuredQuery", "getDocs", "getDoc", "GEMINI_PROXY", "GEMINI_PRIMARY_MODEL", "GEMINI_FALLBACK_MODELS", "ALGOLIA",
   "algoliaReady", "PAGE_SIZE", "ALGOLIA_MAX_FILTER_PAGES", "targetCollection", "collectionResolved", "loadedMovies", "detectValidCollection", "detectGenresArray", "detectLatestYear", "hasClientFilters", "loadSearch", "SD_RULES", "latestYear", "VOTE_KEYS", "POPULARITY_KEYS", "TMDBID_KEYS", "KEYWORD_KEYS", "MEDIATYPE_KEYS",
   "votesField", "mediaField", "mediaServerFilter", "votesNumeric", "hasPopularityField", "VALUE_LABELS", "GENRE_VARIANTS", "GENRE_CANONICAL",
   "genresArrayReady", "THAI_CHAR", "THAI_TONE_MARKS", "idLooksImdb", "toNum", "toNumOrNull", "pickField", "getVotes", "getPopularity",
@@ -74,7 +74,7 @@ ${SECTIONS.map(([id, h, p, cost]) => `<section><div class="sh"><div><h2>${h}</h2
 <section><div class="sh"><div><h2>สรุปผลสำหรับใส่รายงาน</h2><p>อัปเดตอัตโนมัติหลังรันแต่ละหัวข้อ — คัดลอกไปวางในรายงาน หรือส่งไฟล์ .md / .json กลับมาให้ช่วยสรุปต่อ</p></div></div>
 <textarea id="summary" readonly placeholder="ยังไม่ได้รัน"></textarea>
 <div class="row"><button id="btn-copy" type="button">คัดลอก Markdown</button><button id="btn-md" type="button">ดาวน์โหลด .md</button><button id="btn-json" type="button">ดาวน์โหลด .json</button></div></section>
-<p class="foot">ใช้ Firestore reads รวมประมาณ 8,000–10,000 ครั้งต่อการรันทั้งหมด (โควตาฟรี 50,000/วัน) · ไฟล์นี้มี API key เดียวกับเว็บแอป อย่าเผยแพร่สาธารณะ</p>
+<p class="foot">ใช้ Firestore reads รวมประมาณ 8,000–10,000 ครั้งต่อการรันทั้งหมด (โควตาฟรี 50,000/วัน) · หัวข้อ 8 เรียก Gemini ผ่าน Cloud Function เดียวกับเว็บแอป จึงต้องเปิดไฟล์นี้จาก GitHub Pages หรือ http://localhost (เปิดแบบดับเบิลคลิกไฟล์จะถูกปฏิเสธ)</p>
 </div>
 <script type="module">
 const APP_VERSION = ${JSON.stringify(version)};

@@ -784,7 +784,8 @@
         // =============================================================
         // CONFIG
         // =============================================================
-        const GEMINI_API_KEY = ""; // เอารหัสออกก่อนขึ้น GitHub: แชทจะทำงานโหมด Offline
+        // แชทบอทเรียก Gemini ผ่าน Firebase Cloud Function (functions/) ซึ่งเก็บ API key ไว้ฝั่ง server — ในหน้าเว็บจึงไม่มี key
+        const GEMINI_PROXY = "https://asia-southeast1-movie-858f6.cloudfunctions.net/gemini";
         const GEMINI_PRIMARY_MODEL = "gemini-3.1-flash-lite";
         const GEMINI_FALLBACK_MODELS = ["gemini-3.1-flash-lite-preview", "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"];
 
@@ -2785,7 +2786,7 @@
         // =============================================================
         // LLM CORE
         // =============================================================
-        const GEMINI_URL = m => `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`;
+        const GEMINI_URL = m => `${GEMINI_PROXY}/models/${m}:generateContent`;
         let geminiModel = GEMINI_PRIMARY_MODEL;
         let geminiDownUntil = 0;   // ถ้า Gemini ล่ม จะพักใช้ 60 วินาทีแล้วลองใหม่ (เดิมพังแล้วพังถาวร)
         const chatHistory = [];
@@ -2798,7 +2799,7 @@
                 try {
                     const res = await fetch(GEMINI_URL(model), {
                         method: "POST",
-                        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+                        headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                             systemInstruction: { parts: [{ text: system }] },
                             contents,
