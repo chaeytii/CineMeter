@@ -52,6 +52,8 @@ class FakeApis:
         if "omdbapi.com" in u.netloc:
             self.omdb_calls.append(q["i"])
             d = self.omdb.get(q["i"])
+            if d == "ERROR":
+                return FakeResponse({}, 500)          # OMDb ล่ม / เน็ตหลุด
             return FakeResponse(d if d else {"Response": "False", "Error": "not found"})
         path = u.path.replace("/3/", "", 1)
         if path.startswith("find/"):
@@ -130,9 +132,9 @@ class WeeklyUpdateTest(unittest.TestCase):
         ratings = ratings_of(**{f"tt100000{i}": ("7.5", 1000 + i * 100) for i in range(5)}, tt9999999=("6.0", 400))
         eligible = {f"tt100000{i}": 2025 for i in range(5)}
         store = FakeStore({})
-        stats = self.run_update(store, ratings, eligible, apis, budget=3)
+        stats = self.run_update(store, ratings, eligible, apis, budget=5)   # 60% ของ 5 = 3 เรื่อง
         added = set(store.writes["MOVIES"])
-        self.assertEqual(added, {"tt1000004", "tt1000003", "tt1000002"}, "ต้องเลือกเรื่องโหวตมากก่อน และไม่เกินโควตา 3")
+        self.assertEqual(added, {"tt1000004", "tt1000003", "tt1000002"}, "ต้องเลือกเรื่องโหวตมากก่อน และไม่เกิน 60% ของงบ")
         self.assertEqual(len(apis.omdb_calls), 3)
         self.assertEqual(stats["backlog_left"], 2)
         doc = store.writes["MOVIES"]["tt1000004"]
@@ -202,6 +204,72 @@ class WeeklyUpdateTest(unittest.TestCase):
         store2 = FakeStore(movies, genres={"ดราม่า": g})
         self.run_update(store2, ratings_of(tt0000005=("7.0", 10000), tt0000006=("9.0", 10000)), {}, FakeApis({}, {}))
         self.assertEqual(store2.writes.get("GENRE_ANALYSIS", {}), {})
+
+    def test_new_title_not_added_when_omdb_fails(self):
+        tmdb = {("movie", 40): tmdb_movie(40, "tt4000000"), ("movie", 41): tmdb_movie(41, "tt4000001")}
+        apis = FakeApis(tmdb, {"tt4000000": "ERROR", "tt4000001": omdb()})
+        store = FakeStore({})
+        ratings = ratings_of(tt4000000=("7.0", 9000), tt4000001=("7.0", 8000))
+        stats = self.run_update(store, ratings, {"tt4000000": 2025, "tt4000001": 2025}, apis)
+        self.assertEqual(set(store.writes["MOVIES"]), {"tt4000001"}, "เรื่องที่ OMDb ตอบไม่ได้ต้องไม่ถูกเพิ่มแบบข้อมูลไม่ครบ")
+        self.assertEqual(stats["new_omdb_failed"], 1)
+        self.assertEqual(stats["backlog_left"], 1, "ต้องเหลือไว้ทำรอบหน้า")
+
+    def test_new_title_not_added_after_budget_runs_out(self):
+        # งบ 1 → เรื่องใหม่ได้ int(0.6) = 0 ครั้ง: ต้องไม่เพิ่มเรื่องที่ไม่ได้ถาม OMDb เลย
+        tmdb = {("movie", 50): tmdb_movie(50, "tt5000000")}
+        store = FakeStore({})
+        stats = self.run_update(store, ratings_of(tt5000000=("7.0", 9000)), {"tt5000000": 2025},
+                                FakeApis(tmdb, {"tt5000000": omdb()}), budget=1)
+        self.assertNotIn("tt5000000", store.writes.get("MOVIES", {}))
+        self.assertEqual(stats["added"], 0)
+
+    def test_backfill_fills_missing_critics_for_old_titles(self):
+        old = existing(meta="N/A", rt="N/A")
+        old.update({"Critics_Average": 0})
+        store = FakeStore({"tt0000007": old})
+        apis = FakeApis({}, {"tt0000007": omdb(meta="60", rt="70%")})
+        stats = self.run_update(store, ratings_of(tt0000007=("7.0", 10000)), {}, apis)
+        w = store.writes["MOVIES"]["tt0000007"]
+        self.assertEqual((w["Metascore"], w["TomatoScore"], w["Critics_Average"]), ("60", "70%", 6.5))
+        self.assertEqual(w["omdbCheckedAt"], TODAY.isoformat())
+        self.assertEqual(w["Movie_Critics_SD"], fm.calculate_sd([6.0, 7.0]))
+        self.assertEqual(stats["backfilled"], 1)
+
+    def test_backfill_skips_titles_checked_recently_and_marks_no_data(self):
+        recent_check = existing(meta="N/A", rt="N/A", omdbCheckedAt=(TODAY - dt.timedelta(days=30)).isoformat())
+        never = existing(meta="N/A", rt="N/A")
+        store = FakeStore({"tt0000008": recent_check, "tt0000009": never})
+        apis = FakeApis({}, {})     # OMDb ไม่มีคะแนนเรื่องไหนเลย
+        self.run_update(store, ratings_of(tt0000008=("7.0", 10000), tt0000009=("7.0", 10000)), {}, apis)
+        self.assertEqual(apis.omdb_calls, ["tt0000009"], "เรื่องที่เพิ่งตรวจเมื่อ 30 วันก่อนต้องไม่ถูกถามซ้ำ")
+        self.assertEqual(store.writes["MOVIES"]["tt0000009"]["omdbCheckedAt"], TODAY.isoformat())
+
+    def test_dry_run_calls_omdb_at_most_20_times(self):
+        movies = {f"tt01{i:05d}": existing(meta="N/A", rt="N/A") for i in range(50)}
+        apis = FakeApis({}, {})
+        store = FakeStore(movies)
+        stats = self.run_update(store, ratings_of(**{k: ("7.0", 10000) for k in movies}), {}, apis, budget=450000, dry_run=True)
+        self.assertLessEqual(len(apis.omdb_calls), 20)
+        self.assertEqual(stats["backfill_candidates"], 50)
+        self.assertEqual(store.writes, {})
+
+    def test_budget_split_new_refresh_backfill(self):
+        tmdb = {("movie", 100 + i): tmdb_movie(100 + i, f"tt60000{i:02d}") for i in range(20)}
+        omdb_data = {f"tt60000{i:02d}": omdb() for i in range(20)}
+        movies = {}
+        for i in range(10):
+            movies[f"tt70000{i:02d}"] = existing(Released="2026-06-01", Year="2026")     # รีเฟรช
+            movies[f"tt80000{i:02d}"] = existing(meta="N/A", rt="N/A")                    # เติมคะแนน
+        omdb_data.update({k: omdb(meta="88") for k in movies})
+        apis = FakeApis(tmdb, omdb_data)
+        ratings = ratings_of(**{f"tt60000{i:02d}": ("7.0", 5000 + i) for i in range(20)}, **{k: ("7.0", 10000) for k in movies})
+        stats = self.run_update(FakeStore(movies), ratings, {f"tt60000{i:02d}": 2025 for i in range(20)}, apis, budget=10)
+        new_calls = [c for c in apis.omdb_calls if c.startswith("tt6")]
+        refresh_calls = [c for c in apis.omdb_calls if c.startswith("tt7")]
+        backfill_calls = [c for c in apis.omdb_calls if c.startswith("tt8")]
+        self.assertEqual((len(new_calls), len(refresh_calls), len(backfill_calls)), (6, 2, 2))
+        self.assertEqual(stats["omdb_calls"], 10)
 
 
 if __name__ == "__main__":

@@ -5,8 +5,9 @@
 #   1) คะแนน/โหวต IMDb ของทุกเรื่อง   — จากไฟล์ฟรีของ IMDb (ไม่ใช้ OMDb)
 #   2) Popularity / คะแนน TMDB         — เฉพาะหนัง 3 ปีล่าสุด (ใช้กับหมวด Trending now)
 #   3) เรื่องใหม่ที่โหวตเกิน 500         — ดึงครบทุกฟิลด์ จำกัดจำนวนตามโควตา OMDb
-#   4) คะแนน RT / Metacritic            — เฉพาะหนังที่ออกฉายไม่เกิน 12 เดือน (ใช้โควตา OMDb ที่เหลือ)
-#   5) GENRE_ANALYSIS                   — คำนวณใหม่จากข้อมูลทั้งฐาน
+#   4) คะแนน RT / Metacritic            — หนังที่ออกฉายไม่เกิน 12 เดือน
+#   5) เติมคะแนนนักวิจารณ์              — หนังเก่าที่ยังไม่มี RT/Metacritic (ใช้งบ OMDb ที่เหลือ)
+#   6) GENRE_ANALYSIS                   — คำนวณใหม่จากข้อมูลทั้งฐาน
 # แล้วเขียนลง Firestore เฉพาะเรื่องที่ค่าเปลี่ยนจริง
 #
 # รันเอง:  python weekly_update.py --dry-run     (คำนวณแต่ไม่เขียนฐานข้อมูล)
@@ -34,14 +35,20 @@ VOTES_CHANGE = 0.02            # อัปเดตโหวตเมื่อ�
 POPULARITY_CHANGE = 0.10       # อัปเดต Popularity เมื่อเปลี่ยนเกิน 10%
 TRENDING_YEARS = 3             # Popularity: ปีปัจจุบันและย้อนหลัง 2 ปี
 CRITICS_REFRESH_DAYS = 365     # RT/Metacritic: หนังที่ออกไม่เกิน 1 ปี
-MAX_FIND_LOOKUPS = 5000        # จำกัดการแปลงรหัส IMDb → TMDB ต่อรอบ
+MAX_FIND_LOOKUPS = 20000       # จำกัดการแปลงรหัส IMDb → TMDB ต่อรอบ
+NEW_SHARE = 0.6                # งบ OMDb สำหรับเรื่องใหม่
+REFRESH_SHARE = 0.2            # งบ OMDb สำหรับรีเฟรชหนังที่เพิ่งออก (ที่เหลือใช้เติมคะแนนหนังเก่า)
+OMDB_RECHECK_DAYS = 90         # หนังเก่าที่ OMDb ไม่มีคะแนน จะไม่ถามซ้ำภายใน 90 วัน
+DRY_RUN_OMDB_CALLS = 20        # dry run เรียก OMDb จริงไม่เกินเท่านี้
+OMDB_WORKERS = 15
 BATCH_SIZE = 400
 WORKERS = 8
 
 # ฟิลด์ที่ต้องอ่านจาก Firestore เพื่อคำนวณ
 READ_FIELDS = ["imdbRating", "imdbVotes", "tmdbRating", "Metascore", "TomatoScore", "Critics_Average",
                "Audience_Average", "Movie_Critics_SD", "Movie_Audience_SD", "Overall_SD",
-               "Recommended_Trust_Side", "Popularity", "tmdbID", "MediaType", "Released", "Year", "Genre_for_cal"]
+               "Recommended_Trust_Side", "Popularity", "tmdbID", "MediaType", "Released", "Year", "Genre_for_cal",
+               "omdbCheckedAt"]
 SCORE_FIELDS = ["Critics_Average", "Audience_Average", "Movie_Critics_SD", "Movie_Audience_SD",
                 "Overall_SD", "Recommended_Trust_Side"]
 
@@ -247,16 +254,19 @@ def find_tmdb(imdb_id):
     return None, None
 
 
-def omdb_scores(imdb_id):
+def omdb_lookup(imdb_id):
+    """คืน (OMDb ตอบกลับไหม, คะแนน) — คะแนนเป็น None ถ้า OMDb ไม่มีข้อมูลเรื่องนี้"""
     data = fm.fetch_omdb_data(imdb_id)
-    if not data or data.get("Response") != "True":
-        return None
+    if data is None:
+        return False, None
+    if data.get("Response") != "True":
+        return True, None
     tomato = "N/A"
     for r in data.get("Ratings", []):
         if r.get("Source") == "Rotten Tomatoes":
             tomato = r.get("Value", "N/A")
             break
-    return {"Metascore": data.get("Metascore", "N/A"), "TomatoScore": tomato, "Awards": data.get("Awards", "N/A")}
+    return True, {"Metascore": data.get("Metascore", "N/A"), "TomatoScore": tomato, "Awards": data.get("Awards", "N/A")}
 
 
 # ---------------------------------------------------------------
@@ -264,8 +274,9 @@ def omdb_scores(imdb_id):
 # ---------------------------------------------------------------
 def run(store, imdb_loader, today, omdb_budget, dry_run=False, log=print):
     stats = {"existing": 0, "imdb_updated": 0, "popularity_updated": 0, "repaired": 0, "added": 0,
-             "critics_refreshed": 0, "omdb_calls": 0, "tmdb_find_calls": 0, "genres_written": 0,
-             "backlog_left": 0, "docs_written": 0}
+             "critics_refreshed": 0, "omdb_calls": 0, "omdb_budget": 0, "tmdb_find_calls": 0, "genres_written": 0,
+             "backlog_total": 0, "backlog_left": 0, "new_omdb_failed": 0, "refresh_candidates": 0,
+             "backfill_candidates": 0, "backfilled": 0, "backfill_left": 0, "docs_written": 0}
 
     movies = store.read_movies(READ_FIELDS)
     stats["existing"] = len(movies)
@@ -329,53 +340,101 @@ def run(store, imdb_loader, today, omdb_budget, dry_run=False, log=print):
             rescore.add(doc_id)
             stats["repaired"] += 1
 
-    # 3) เรื่องใหม่ (เรียงโหวตมากก่อน จำกัดตามโควตา OMDb)
+    # งบ OMDb ต่อรอบ: เรื่องใหม่ ≤ 60%, รีเฟรชหนังที่เพิ่งออก ≤ 20%, เติมคะแนนหนังเก่า = ที่เหลือทั้งหมด
+    if dry_run:
+        omdb_budget = min(omdb_budget, DRY_RUN_OMDB_CALLS)
+    stats["omdb_budget"] = omdb_budget
     real_fetch = fm.fetch_omdb_data
     count_lock = threading.Lock()
+    omdb_ok = set()            # รหัสที่ OMDb ตอบกลับมาแล้ว (มีหรือไม่มีคะแนนก็ตาม)
+    cap = {"limit": 0}         # เพดานสะสมของส่วนที่กำลังทำ
 
     def counted_fetch(imdb_id):
         with count_lock:
+            if stats["omdb_calls"] >= cap["limit"]:
+                return None    # เกินงบ: ไม่เรียกจริง
             stats["omdb_calls"] += 1
-        return real_fetch(imdb_id)
+        data = real_fetch(imdb_id)
+        if data is not None:
+            with count_lock:
+                omdb_ok.add(imdb_id)
+        return data
     fm.fetch_omdb_data = counted_fetch
     try:
+        # 3) เรื่องใหม่ (เรียงโหวตมากก่อน) — ถ้า OMDb ตอบไม่ได้ ไม่เพิ่ม เก็บไว้รอบหน้า
         backlog = sorted((i for i in eligible if i not in movies), key=lambda i: -ratings[i]["votes_num"])
+        stats["backlog_total"] = len(backlog)
         log(f"เรื่องที่ยังไม่มีในฐาน: {len(backlog):,}")
+        cap["limit"] = int(omdb_budget * NEW_SHARE)
         new_docs, pos = {}, 0
         with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as ex:
-            while pos < len(backlog) and stats["omdb_calls"] < omdb_budget and stats["tmdb_find_calls"] < MAX_FIND_LOOKUPS:
-                chunk = backlog[pos: pos + max(1, min(WORKERS * 4, omdb_budget - stats["omdb_calls"]))]
+            while (pos < len(backlog) and stats["omdb_calls"] < cap["limit"] and not fm.omdb_exhausted
+                   and stats["tmdb_find_calls"] < MAX_FIND_LOOKUPS):
+                chunk = backlog[pos: pos + max(1, min(WORKERS * 4, cap["limit"] - stats["omdb_calls"]))]
                 pos += len(chunk)
                 stats["tmdb_find_calls"] += len(chunk)
                 found = list(ex.map(find_tmdb, chunk))
                 jobs = [(tid, kind) for tid, kind in found if tid]
                 for item in ex.map(lambda j: fm.process_single_item({"id": j[0]}, j[1]), jobs):
-                    if item and item["imdbID"] not in movies and item["imdbID"] not in new_docs:
-                        new_docs[item["imdbID"]] = to_firestore_doc(item)
-        stats["backlog_left"] = len(backlog) - pos
+                    if not item or item["imdbID"] in movies or item["imdbID"] in new_docs:
+                        continue
+                    if item["imdbID"] not in omdb_ok:
+                        stats["new_omdb_failed"] += 1
+                        continue
+                    doc = to_firestore_doc(item)
+                    doc["omdbCheckedAt"] = today.isoformat()
+                    new_docs[item["imdbID"]] = doc
+        stats["backlog_left"] = len(backlog) - pos + stats["new_omdb_failed"]
         for doc_id, d in new_docs.items():
             updates[doc_id] = d
             movies[doc_id] = dict(d)
         stats["added"] = len(new_docs)
 
+        def check_critics(ids, limit, mark_checked):
+            """ถาม OMDb ทีละหลายเรื่องพร้อมกัน คืนจำนวนเรื่องที่คะแนนเปลี่ยน"""
+            cap["limit"] = limit
+            changed_n = 0
+            with concurrent.futures.ThreadPoolExecutor(max_workers=OMDB_WORKERS) as ex:
+                for i in range(0, len(ids), OMDB_WORKERS * 4):
+                    if stats["omdb_calls"] >= cap["limit"] or fm.omdb_exhausted:
+                        break
+                    chunk = ids[i: i + OMDB_WORKERS * 4]
+                    for doc_id, (answered, sc) in zip(chunk, ex.map(omdb_lookup, chunk)):
+                        if not answered:
+                            continue
+                        m = movies[doc_id]
+                        fields = {"omdbCheckedAt": today.isoformat()} if mark_checked else {}
+                        if sc and (sc["Metascore"] != m.get("Metascore") or sc["TomatoScore"] != m.get("TomatoScore")):
+                            fields.update(sc)
+                            rescore.add(doc_id)
+                            changed_n += 1
+                        if fields:
+                            put(doc_id, fields)
+            return changed_n
+
         # 4) RT / Metacritic ของหนังที่ออกฉายไม่เกิน 12 เดือน
         cutoff = (today - dt.timedelta(days=CRITICS_REFRESH_DAYS)).isoformat()
+
         def popularity(i):
             p = movies[i].get("Popularity")
             return p if isinstance(p, (int, float)) else 0
         recent = sorted((i for i, m in movies.items() if i not in new_docs and m.get("MediaType") != "ซีรีส์"
                          and str(m.get("Released") or "") >= cutoff), key=lambda i: -popularity(i))
-        for doc_id in recent:
-            if stats["omdb_calls"] >= omdb_budget or fm.omdb_exhausted:
-                break
-            sc = omdb_scores(doc_id)
-            if not sc:
-                continue
-            m = movies[doc_id]
-            if sc["Metascore"] != m.get("Metascore") or sc["TomatoScore"] != m.get("TomatoScore"):
-                put(doc_id, sc)
-                rescore.add(doc_id)
-                stats["critics_refreshed"] += 1
+        stats["refresh_candidates"] = len(recent)
+        stats["critics_refreshed"] = check_critics(recent, stats["omdb_calls"] + int(omdb_budget * REFRESH_SHARE), False)
+
+        # 5) เติมคะแนนนักวิจารณ์ให้หนังเก่าที่ยังไม่มีทั้ง Metascore และ RT (ไม่ถามซ้ำภายใน 90 วัน)
+        recent_set = set(recent)
+        recheck_before = (today - dt.timedelta(days=OMDB_RECHECK_DAYS)).isoformat()
+        missing = lambda v: v in (None, "", "N/A")
+        backfill = sorted((i for i, m in movies.items() if i not in new_docs and i not in recent_set
+                           and missing(m.get("Metascore")) and missing(m.get("TomatoScore"))
+                           and str(m.get("omdbCheckedAt") or "") < recheck_before),
+                          key=lambda i: -parse_votes(movies[i].get("imdbVotes")))
+        stats["backfill_candidates"] = len(backfill)
+        before = stats["omdb_calls"]
+        stats["backfilled"] = check_critics(backfill, omdb_budget, True)
+        stats["backfill_left"] = max(0, len(backfill) - (stats["omdb_calls"] - before))
     finally:
         fm.fetch_omdb_data = real_fetch
 
@@ -389,7 +448,7 @@ def run(store, imdb_loader, today, omdb_budget, dry_run=False, log=print):
         if changed:
             put(doc_id, changed)
 
-    # 5) GENRE_ANALYSIS จากข้อมูลทั้งฐาน (วิธีเดียวกับ fetch_movies.py)
+    # 6) GENRE_ANALYSIS จากข้อมูลทั้งฐาน (วิธีเดียวกับ fetch_movies.py)
     raw = {}
     for m in movies.values():
         g = genre_key(m.get("Genre_for_cal"))
@@ -422,17 +481,23 @@ def run(store, imdb_loader, today, omdb_budget, dry_run=False, log=print):
 
 
 SUMMARY_LABELS = [
-    ("existing", "เรื่องในฐานก่อนเริ่ม"), ("added", "เพิ่มเรื่องใหม่"), ("backlog_left", "เรื่องใหม่ที่รอรอบหน้า"),
+    ("existing", "เรื่องในฐานก่อนเริ่ม"),
+    ("backlog_total", "เรื่องที่ยังไม่มีในฐาน (โหวต > 500)"), ("added", "เพิ่มเรื่องใหม่"),
+    ("new_omdb_failed", "เรื่องใหม่ที่ OMDb ตอบไม่ได้ (รอรอบหน้า)"), ("backlog_left", "เรื่องใหม่ที่รอรอบหน้า"),
     ("imdb_updated", "อัปเดตคะแนน/โหวต IMDb"), ("popularity_updated", "อัปเดต Popularity/คะแนน TMDB"),
-    ("critics_refreshed", "อัปเดตคะแนน RT/Metacritic"), ("repaired", "ซ่อมค่า 0 → N/A"),
+    ("refresh_candidates", "หนังที่ออกไม่เกิน 12 เดือน (ตรวจ RT/Metacritic)"), ("critics_refreshed", "อัปเดตคะแนน RT/Metacritic"),
+    ("backfill_candidates", "หนังเก่าที่ขาดคะแนนนักวิจารณ์"), ("backfilled", "เติมคะแนนนักวิจารณ์ได้"),
+    ("backfill_left", "หนังเก่าที่ยังรอตรวจ"), ("repaired", "ซ่อมค่า 0 → N/A"),
     ("docs_written", "document ที่เขียน (MOVIES)"), ("genres_written", "document ที่เขียน (GENRE_ANALYSIS)"),
-    ("omdb_calls", "เรียก OMDb"), ("tmdb_find_calls", "แปลงรหัส IMDb → TMDB"),
+    ("omdb_calls", "เรียก OMDb"), ("omdb_budget", "งบ OMDb รอบนี้"), ("tmdb_find_calls", "แปลงรหัส IMDb → TMDB"),
 ]
 
 
 def main():
     ap = argparse.ArgumentParser(description="อัปเดตข้อมูลหนังใน Firestore แบบเฉพาะส่วนที่เปลี่ยน")
     ap.add_argument("--dry-run", action="store_true", help="คำนวณแต่ไม่เขียนฐานข้อมูล")
+    ap.add_argument("--omdb-limit", type=int, default=int(os.getenv("OMDB_DAILY_LIMIT") or 0),
+                    help="งบ OMDb รวมต่อรอบ (เช่น 450000 สำหรับ plan 500,000/วัน) ถ้าไม่ตั้ง ใช้ 900 ต่อ key")
     ap.add_argument("--omdb-budget-per-key", type=int, default=int(os.getenv("OMDB_BUDGET_PER_KEY", "900")))
     ap.add_argument("--cache-dir", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".imdb_cache"))
     args = ap.parse_args()
@@ -445,7 +510,7 @@ def main():
     fm.OMDB_KEYS = [k.strip() for k in os.environ["OMDB_API_KEYS"].split(",") if k.strip()]
 
     store = FirestoreStore(os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
-    budget = args.omdb_budget_per_key * len(fm.OMDB_KEYS)
+    budget = args.omdb_limit or args.omdb_budget_per_key * len(fm.OMDB_KEYS)
     stats = run(store, lambda today: load_imdb(args.cache_dir, today), dt.date.today(), budget, dry_run=dry_run)
 
     lines = [f"## อัปเดตข้อมูลหนัง {'(dry run — ไม่ได้เขียนฐานข้อมูล)' if dry_run else ''}", "", "| รายการ | จำนวน |", "|---|---:|"]
