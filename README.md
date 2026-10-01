@@ -63,6 +63,7 @@ GitHub Actions รัน `firebase-upload/weekly_update.py` ทุกวัน�
 4. อัปเดตคะแนน Rotten Tomatoes / Metacritic ของหนังที่ออกฉายไม่เกิน 12 เดือน
 5. เติมคะแนนนักวิจารณ์ให้หนังเก่าที่ยังไม่มีทั้ง RT และ Metacritic (เรื่องที่ OMDb ไม่มีคะแนนจริงจะไม่ถูกถามซ้ำภายใน 90 วัน — ดูจากฟิลด์ `omdbCheckedAt`)
 6. คำนวณ `GENRE_ANALYSIS` ใหม่ แล้วเขียน Firestore **เฉพาะเรื่องที่ค่าเปลี่ยน**
+7. ส่งเรื่องที่เปลี่ยนเข้า **Algolia** (ช่องค้นหา) ด้วย — แทนที่ทั้ง index เมื่อข้อมูลไม่ตรงกัน หรือรอบแรกของทุกเดือน (settings ของ index เดิมถูกเก็บไว้)
 
 **งบ OMDb ต่อรอบ** = `OMDB_DAILY_LIMIT` (ค่าเริ่มต้น 450,000 = 90% ของ plan Standard 500,000 ครั้ง/วัน) แบ่งเป็น เรื่องใหม่ ≤ 60%, รีเฟรชหนังที่เพิ่งออก ≤ 20%, ที่เหลือใช้เติมคะแนนหนังเก่า
 ถ้าเปลี่ยน plan: Settings → Secrets and variables → Actions → แท็บ **Variables** → New repository variable ชื่อ `OMDB_DAILY_LIMIT` ใส่ตัวเลขประมาณ 90% ของโควตาต่อวัน (ไม่ต้องแก้โค้ด)
@@ -70,13 +71,14 @@ dry run เรียก OMDb จริงไม่เกิน 20 ครั้�
 
 สูตรคะแนนและ S.D. ใช้ฟังก์ชันเดียวกับ `fetch_movies.py` คะแนนที่ไม่มีข้อมูลเก็บเป็น `"N/A"` (รอบแรกจะซ่อมเรื่องที่ import ชุดแรกเขียนเป็น `0` ไว้)
 
-**ตั้งค่าครั้งแรก** — GitHub → repo นี้ → Settings → Secrets and variables → Actions → New repository secret สร้าง 3 ตัว:
+**ตั้งค่าครั้งแรก** — GitHub → repo นี้ → Settings → Secrets and variables → Actions → New repository secret สร้าง 4 ตัว:
 
 | ชื่อ | ค่า |
 |---|---|
 | `TMDB_API_KEY` | API key ของ TMDB |
 | `OMDB_API_KEYS` | OMDb key ทุกตัว คั่นด้วย comma เช่น `key1,key2` |
 | `FIREBASE_SERVICE_ACCOUNT` | เปิดไฟล์ `serviceAccountKey.json` ด้วย Notepad แล้วคัดลอก**ทั้งไฟล์**มาวาง |
+| `ALGOLIA_ADMIN_KEY` | Algolia dashboard → Settings → API Keys → **Admin API Key** (ไม่ใช่ Search-Only) — ถ้าไม่ตั้ง ระบบจะข้ามการ sync ช่องค้นหา |
 
 **ทดสอบ** — แท็บ Actions → Weekly data update → Run workflow (ติ๊ก Dry run ไว้ = คำนวณอย่างเดียว ไม่เขียนฐานข้อมูล) → เปิดผลดูตารางสรุป ถ้าตัวเลขสมเหตุสมผลค่อยรันอีกครั้งโดยเอาติ๊กออก หลังจากนั้นระบบจะรันเองทุกสัปดาห์
 

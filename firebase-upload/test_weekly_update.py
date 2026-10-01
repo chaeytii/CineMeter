@@ -1,6 +1,7 @@
 # ทดสอบ weekly_update.py โดยไม่ต่อเน็ต: จำลอง TMDB / OMDb / ไฟล์ IMDb / Firestore
 # รัน:  python -m unittest test_weekly_update.py   (ในโฟลเดอร์ firebase-upload)
 import datetime as dt
+import json
 import os
 import sys
 import unittest
@@ -21,6 +22,8 @@ class FakeStore:
         self.writes = {}
 
     def read_movies(self, fields):
+        if fields is None:
+            return {k: dict(v) for k, v in self.movies.items()}
         return {k: {f: v[f] for f in fields if f in v} for k, v in self.movies.items()}
 
     def read_genres(self):
@@ -28,11 +31,53 @@ class FakeStore:
 
     def write(self, collection, docs):
         self.writes.setdefault(collection, {}).update({k: dict(v) for k, v in docs.items()})
+        if collection == "MOVIES":
+            for k, v in docs.items():
+                self.movies.setdefault(k, {}).update(v)
+
+
+class FakeAlgolia:
+    """Algolia REST ปลอม: เก็บ index เป็น dict ชื่อ -> {"records": {objectID: record}, "settings": {...}}"""
+
+    def __init__(self, records, settings=None):
+        self.indexes = {wu.ALGOLIA_INDEX: {"records": dict(records), "settings": dict(settings or {"searchableAttributes": ["Title_EN"]})}}
+        self.calls = []
+
+    def request(self, method, url, headers=None, data=None, timeout=None):
+        path = urlparse(url).path
+        body = json.loads(data) if data else None
+        self.calls.append((method, path, body))
+        parts = path.split("/")          # ['', '1', 'indexes', name, action, ...]
+        name, action = parts[3], parts[4]
+        idx = self.indexes.setdefault(name, {"records": {}, "settings": {}})
+        if action == "query":
+            hits = [dict(r, objectID=oid) for oid, r in list(idx["records"].items())[:body["hitsPerPage"]]]
+            return FakeResponse({"nbHits": len(idx["records"]), "hits": hits})
+        if action == "batch":
+            for req in body["requests"]:
+                if req["action"] == "addObject":
+                    idx["records"][req["body"]["objectID"]] = dict(req["body"])
+                elif req["action"] == "partialUpdateObject":
+                    idx["records"].setdefault(req["objectID"], {}).update(req["body"])
+            return FakeResponse({"taskID": len(self.calls)})
+        if action == "operation":
+            dest = self.indexes.setdefault(body["destination"], {"records": {}, "settings": {}})
+            if body["operation"] == "copy":       # copy แบบระบุ scope: คัดลอกเฉพาะส่วนที่ขอ ไม่คัดลอก record
+                if "settings" in body.get("scope", []):
+                    dest["settings"] = dict(idx["settings"])
+            elif body["operation"] == "move":
+                self.indexes[body["destination"]] = idx
+                del self.indexes[name]
+            return FakeResponse({"taskID": len(self.calls)})
+        if action == "task":
+            return FakeResponse({"status": "published"})
+        raise AssertionError(path)
 
 
 class FakeResponse:
     def __init__(self, data, status=200):
         self._data, self.status_code = data, status
+        self.text = json.dumps(data)
 
     def json(self):
         return self._data
@@ -106,10 +151,12 @@ class WeeklyUpdateTest(unittest.TestCase):
         fm.omdb_exhausted = False
         fm.imdb_lookup.clear()
 
-    def run_update(self, store, ratings, eligible, apis, budget=100, dry_run=False):
+    def run_update(self, store, ratings, eligible, apis, budget=100, dry_run=False, algolia=None, today=TODAY):
         fm.imdb_lookup.update(ratings)       # process_single_item() อ่านโหวตจากตรงนี้
+        client = wu.AlgoliaClient("APP", "ADMIN", wu.ALGOLIA_INDEX, http=algolia) if algolia else None
         with mock.patch("requests.get", apis.get):
-            return wu.run(store, lambda today: (ratings, eligible), TODAY, budget, dry_run=dry_run, log=lambda *a: None)
+            return wu.run(store, lambda today: (ratings, eligible), today, budget, dry_run=dry_run,
+                          log=lambda *a: None, algolia=client)
 
     def test_unchanged_titles_are_not_written(self):
         store = FakeStore({"tt0000001": existing()})
@@ -270,6 +317,54 @@ class WeeklyUpdateTest(unittest.TestCase):
         backfill_calls = [c for c in apis.omdb_calls if c.startswith("tt8")]
         self.assertEqual((len(new_calls), len(refresh_calls), len(backfill_calls)), (6, 2, 2))
         self.assertEqual(stats["omdb_calls"], 10)
+
+    # ---------------- Algolia ----------------
+    def test_algolia_full_replace_when_object_ids_are_not_imdb_ids(self):
+        movies = {"tt0000011": existing(), "tt0000012": existing()}
+        # ข้อมูลที่อัปโหลดมือ: objectID สุ่ม และคะแนนเก่า
+        algolia = FakeAlgolia({"a1b2c3": {"imdbID": "tt0000011", "Critics_Average": 0},
+                               "d4e5f6": {"imdbID": "tt0000012", "Critics_Average": 0}})
+        store = FakeStore(movies)
+        stats = self.run_update(store, ratings_of(tt0000011=("9.0", 30000), tt0000012=("7.0", 10000)), {},
+                                FakeApis({}, {}), algolia=algolia, today=dt.date(2026, 10, 12))
+        main = algolia.indexes[wu.ALGOLIA_INDEX]
+        self.assertEqual(set(main["records"]), {"tt0000011", "tt0000012"}, "ต้องไม่มี record เก่าที่ objectID สุ่มค้างอยู่")
+        self.assertEqual(main["records"]["tt0000011"]["imdbRating"], "9.0", "ต้องเป็นข้อมูลล่าสุดหลังเขียน Firestore")
+        self.assertEqual(main["settings"], {"searchableAttributes": ["Title_EN"]}, "ต้องเก็บ settings เดิมไว้")
+        self.assertNotIn(wu.ALGOLIA_INDEX + "_tmp", algolia.indexes)
+        self.assertEqual((stats["algolia_mode"], stats["algolia_records"]), ("แทนที่ทั้ง index", 2))
+
+    def test_algolia_incremental_update_only_changed_docs(self):
+        movies = {f"tt00001{i:02d}": existing() for i in range(10)}
+        algolia = FakeAlgolia({k: dict(v, imdbID=k) for k, v in movies.items()})
+        store = FakeStore(movies)
+        ratings = ratings_of(**{k: ("7.0", 10000) for k in movies})
+        ratings["tt0000105"] = {"rating": "8.8", "votes_num": 99000, "votes_str": "99,000"}
+        stats = self.run_update(store, ratings, {}, FakeApis({}, {}), algolia=algolia, today=dt.date(2026, 10, 12))
+        batches = [b for m, p, b in algolia.calls if p.endswith("/batch")]
+        sent = [r["objectID"] for b in batches for r in b["requests"]]
+        self.assertEqual(sent, ["tt0000105"])
+        self.assertEqual(batches[0]["requests"][0]["action"], "partialUpdateObject")
+        self.assertEqual(algolia.indexes[wu.ALGOLIA_INDEX]["records"]["tt0000105"]["imdbRating"], "8.8")
+        self.assertEqual(stats["algolia_mode"], "อัปเดตทีละเรื่อง")
+
+    def test_algolia_full_replace_on_first_week_of_month(self):
+        movies = {"tt0000013": existing()}
+        algolia = FakeAlgolia({"tt0000013": dict(movies["tt0000013"], imdbID="tt0000013")})
+        stats = self.run_update(FakeStore(movies), ratings_of(tt0000013=("7.0", 10000)), {}, FakeApis({}, {}),
+                                algolia=algolia, today=dt.date(2026, 11, 2))
+        self.assertEqual(stats["algolia_mode"], "แทนที่ทั้ง index")
+
+    def test_algolia_not_called_on_dry_run(self):
+        algolia = FakeAlgolia({})
+        self.run_update(FakeStore({"tt0000014": existing()}), ratings_of(tt0000014=("9.0", 50000)), {},
+                        FakeApis({}, {}), dry_run=True, algolia=algolia)
+        self.assertEqual(algolia.calls, [])
+
+    def test_algolia_record_is_trimmed_when_too_large(self):
+        rec = wu.algolia_record("tt1", {"Plot": "ก" * 6000, "Title_EN": "X"})
+        self.assertEqual(rec["objectID"], "tt1")
+        self.assertLessEqual(len(json.dumps(rec, ensure_ascii=False).encode("utf-8")), wu.ALGOLIA_MAX_RECORD_BYTES)
 
 
 if __name__ == "__main__":

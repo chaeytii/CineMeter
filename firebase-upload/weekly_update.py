@@ -8,6 +8,7 @@
 #   4) คะแนน RT / Metacritic            — หนังที่ออกฉายไม่เกิน 12 เดือน
 #   5) เติมคะแนนนักวิจารณ์              — หนังเก่าที่ยังไม่มี RT/Metacritic (ใช้งบ OMDb ที่เหลือ)
 #   6) GENRE_ANALYSIS                   — คำนวณใหม่จากข้อมูลทั้งฐาน
+#   7) Algolia                          — ส่งข้อมูลที่เปลี่ยนเข้าช่องค้นหา (ถ้าตั้ง ALGOLIA_ADMIN_KEY)
 # แล้วเขียนลง Firestore เฉพาะเรื่องที่ค่าเปลี่ยนจริง
 #
 # รันเอง:  python weekly_update.py --dry-run     (คำนวณแต่ไม่เขียนฐานข้อมูล)
@@ -159,7 +160,9 @@ class FirestoreStore:
         self.db = firestore.client()
 
     def read_movies(self, fields):
-        return {d.id: d.to_dict() or {} for d in self.db.collection("MOVIES").select(fields).stream()}
+        col = self.db.collection("MOVIES")
+        query = col.select(fields) if fields else col
+        return {d.id: d.to_dict() or {} for d in query.stream()}
 
     def read_genres(self):
         return {d.id: d.to_dict() or {} for d in self.db.collection("GENRE_ANALYSIS").stream()}
@@ -269,14 +272,108 @@ def omdb_lookup(imdb_id):
     return True, {"Metascore": data.get("Metascore", "N/A"), "TomatoScore": tomato, "Awards": data.get("Awards", "N/A")}
 
 
+
+# ---------------------------------------------------------------
+# Algolia (ช่องค้นหาบนหน้าเว็บ) — sync ให้ตรงกับ Firestore
+# ---------------------------------------------------------------
+ALGOLIA_APP_ID = "GZASG6MLUC"                 # ตรงกับ ALGOLIA.appId ใน index.html
+ALGOLIA_INDEX = "firebase_movies_1980_2026"   # ตรงกับ ALGOLIA.indexName ใน index.html
+ALGOLIA_BATCH = 1000
+ALGOLIA_MAX_RECORD_BYTES = 9500               # Algolia แผนฟรีรับ record ละไม่เกิน 10 KB
+ALGOLIA_COUNT_TOLERANCE = 0.01
+
+
+class AlgoliaClient:
+    def __init__(self, app_id, admin_key, index, http=requests):
+        self.app_id, self.index, self.http = app_id, index, http
+        self.headers = {"X-Algolia-Application-Id": app_id, "X-Algolia-API-Key": admin_key,
+                        "Content-Type": "application/json"}
+
+    def _call(self, method, path, body=None, read=False):
+        host = f"https://{self.app_id}-dsn.algolia.net" if read else f"https://{self.app_id}.algolia.net"
+        r = self.http.request(method, host + path, headers=self.headers,
+                              data=json.dumps(body, ensure_ascii=False) if body is not None else None, timeout=60)
+        if r.status_code >= 300:
+            raise RuntimeError(f"Algolia {method} {path}: {r.status_code} {str(r.text)[:200]}")
+        return r.json()
+
+    def sample(self, index):
+        """คืน (จำนวน record, ตัวอย่าง [(objectID, imdbID)])"""
+        data = self._call("POST", f"/1/indexes/{index}/query",
+                          {"query": "", "hitsPerPage": 20, "attributesToRetrieve": ["imdbID"]}, read=True)
+        return data.get("nbHits", 0), [(h.get("objectID"), h.get("imdbID")) for h in data.get("hits", [])]
+
+    def batch(self, index, requests_):
+        return self._call("POST", f"/1/indexes/{index}/batch", {"requests": requests_}).get("taskID")
+
+    def operation(self, index, body):
+        return self._call("POST", f"/1/indexes/{index}/operation", body).get("taskID")
+
+    def wait(self, index, task_id, poll=2.0, timeout=1800):
+        if task_id is None:
+            return
+        import time
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self._call("GET", f"/1/indexes/{index}/task/{task_id}").get("status") == "published":
+                return
+            time.sleep(poll)
+        raise RuntimeError(f"Algolia task {task_id} ไม่เสร็จภายในเวลา")
+
+
+def algolia_record(doc_id, data):
+    rec = dict(data)
+    rec["objectID"] = doc_id
+    rec.setdefault("imdbID", doc_id)
+    for field in ("Plot", "Keyword"):
+        if len(json.dumps(rec, ensure_ascii=False).encode("utf-8")) <= ALGOLIA_MAX_RECORD_BYTES:
+            break
+        if isinstance(rec.get(field), str):
+            rec[field] = rec[field][:300]
+    return rec
+
+
+def sync_algolia(client, store, updates, firestore_count, today, log=print):
+    """คืน (โหมด, จำนวน record ที่ส่ง)
+    แทนที่ทั้ง index ถ้า objectID ไม่ใช่ imdbID / จำนวนต่างเกิน 1% / รอบแรกของเดือน — นอกนั้นอัปเดตเฉพาะเรื่องที่เปลี่ยน"""
+    count, sample = client.sample(client.index)
+    ids_ok = bool(sample) and all(oid == iid for oid, iid in sample)
+    count_ok = firestore_count and abs(count - firestore_count) / firestore_count <= ALGOLIA_COUNT_TOLERANCE
+    if not ids_ok or not count_ok or today.day <= 7:
+        reason = "objectID ไม่ใช่ imdbID" if not ids_ok else ("จำนวนไม่ตรง" if not count_ok else "รอบแรกของเดือน")
+        log(f"Algolia: แทนที่ทั้ง index ({reason}; Algolia {count:,} / Firestore {firestore_count:,})")
+        tmp = f"{client.index}_tmp"
+        client.wait(tmp, client.operation(client.index, {"operation": "copy", "destination": tmp,
+                                                         "scope": ["settings", "synonyms", "rules"]}))
+        docs = store.read_movies(None)
+        items = list(docs.items())
+        task = None
+        for i in range(0, len(items), ALGOLIA_BATCH):
+            task = client.batch(tmp, [{"action": "addObject", "body": algolia_record(k, v)}
+                                      for k, v in items[i: i + ALGOLIA_BATCH]])
+        client.wait(tmp, task)
+        client.wait(client.index, client.operation(tmp, {"operation": "move", "destination": client.index}))
+        return "แทนที่ทั้ง index", len(items)
+
+    log(f"Algolia: อัปเดต {len(updates):,} เรื่องที่เปลี่ยน")
+    items = list(updates.items())
+    task = None
+    for i in range(0, len(items), ALGOLIA_BATCH):
+        task = client.batch(client.index, [{"action": "partialUpdateObject", "objectID": k,
+                                            "body": algolia_record(k, v)} for k, v in items[i: i + ALGOLIA_BATCH]])
+    client.wait(client.index, task)
+    return "อัปเดตทีละเรื่อง", len(items)
+
+
 # ---------------------------------------------------------------
 # งานหลัก
 # ---------------------------------------------------------------
-def run(store, imdb_loader, today, omdb_budget, dry_run=False, log=print):
+def run(store, imdb_loader, today, omdb_budget, dry_run=False, log=print, algolia=None):
     stats = {"existing": 0, "imdb_updated": 0, "popularity_updated": 0, "repaired": 0, "added": 0,
              "critics_refreshed": 0, "omdb_calls": 0, "omdb_budget": 0, "tmdb_find_calls": 0, "genres_written": 0,
              "backlog_total": 0, "backlog_left": 0, "new_omdb_failed": 0, "refresh_candidates": 0,
-             "backfill_candidates": 0, "backfilled": 0, "backfill_left": 0, "docs_written": 0}
+             "backfill_candidates": 0, "backfilled": 0, "backfill_left": 0, "docs_written": 0,
+             "algolia_mode": "-", "algolia_records": 0}
 
     movies = store.read_movies(READ_FIELDS)
     stats["existing"] = len(movies)
@@ -477,6 +574,9 @@ def run(store, imdb_loader, today, omdb_budget, dry_run=False, log=print):
     else:
         store.write("MOVIES", updates)
         store.write("GENRE_ANALYSIS", genre_updates)
+        if algolia:
+            mode, n = sync_algolia(algolia, store, updates, len(movies), today, log)
+            stats["algolia_mode"], stats["algolia_records"] = mode, n
     return stats
 
 
@@ -489,6 +589,7 @@ SUMMARY_LABELS = [
     ("backfill_candidates", "หนังเก่าที่ขาดคะแนนนักวิจารณ์"), ("backfilled", "เติมคะแนนนักวิจารณ์ได้"),
     ("backfill_left", "หนังเก่าที่ยังรอตรวจ"), ("repaired", "ซ่อมค่า 0 → N/A"),
     ("docs_written", "document ที่เขียน (MOVIES)"), ("genres_written", "document ที่เขียน (GENRE_ANALYSIS)"),
+    ("algolia_mode", "Algolia"), ("algolia_records", "record ที่ส่งเข้า Algolia"),
     ("omdb_calls", "เรียก OMDb"), ("omdb_budget", "งบ OMDb รอบนี้"), ("tmdb_find_calls", "แปลงรหัส IMDb → TMDB"),
 ]
 
@@ -511,10 +612,18 @@ def main():
 
     store = FirestoreStore(os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
     budget = args.omdb_limit or args.omdb_budget_per_key * len(fm.OMDB_KEYS)
-    stats = run(store, lambda today: load_imdb(args.cache_dir, today), dt.date.today(), budget, dry_run=dry_run)
+    algolia = None
+    if os.getenv("ALGOLIA_ADMIN_KEY"):
+        algolia = AlgoliaClient(os.getenv("ALGOLIA_APP_ID") or ALGOLIA_APP_ID, os.environ["ALGOLIA_ADMIN_KEY"],
+                                os.getenv("ALGOLIA_INDEX") or ALGOLIA_INDEX)
+    else:
+        print("ไม่ได้ตั้ง ALGOLIA_ADMIN_KEY — ข้ามการ sync ช่องค้นหา (Algolia)")
+    stats = run(store, lambda today: load_imdb(args.cache_dir, today), dt.date.today(), budget,
+                dry_run=dry_run, algolia=algolia)
 
     lines = [f"## อัปเดตข้อมูลหนัง {'(dry run — ไม่ได้เขียนฐานข้อมูล)' if dry_run else ''}", "", "| รายการ | จำนวน |", "|---|---:|"]
-    lines += [f"| {label} | {stats[k]:,} |" for k, label in SUMMARY_LABELS]
+    lines += [f"| {label} | {stats[k]:,} |" if isinstance(stats[k], int) else f"| {label} | {stats[k]} |"
+              for k, label in SUMMARY_LABELS]
     print("\n".join(lines))
     summary_path = os.getenv("GITHUB_STEP_SUMMARY")
     if summary_path:
