@@ -12,3 +12,5 @@ firebase_movies_*.json
 firebase_genre_analysis_*.json
 firebase-debug.log
 tests/cinemeter-logic-*
+.imdb_cache/
+__pycache__/
