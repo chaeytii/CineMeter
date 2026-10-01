@@ -8,7 +8,8 @@
 #   4) คะแนน RT / Metacritic            — หนังที่ออกฉายไม่เกิน 12 เดือน
 #   5) เติมคะแนนนักวิจารณ์              — หนังเก่าที่ยังไม่มี RT/Metacritic (ใช้งบ OMDb ที่เหลือ)
 #   6) GENRE_ANALYSIS                   — คำนวณใหม่จากข้อมูลทั้งฐาน
-#   7) Algolia                          — ส่งข้อมูลที่เปลี่ยนเข้าช่องค้นหา (ถ้าตั้ง ALGOLIA_ADMIN_KEY)
+#   7) คะแนนจัดอันดับ Audience_Score / Critics_Score (ถ่วงจำนวนโหวต) + เอาเรื่องที่โหวต TMDB < 10 ออก
+#   8) Algolia                          — ส่งข้อมูลที่เปลี่ยนเข้าช่องค้นหา (ถ้าตั้ง ALGOLIA_ADMIN_KEY)
 # แล้วเขียนลง Firestore เฉพาะเรื่องที่ค่าเปลี่ยนจริง
 #
 # รันเอง:  python weekly_update.py --dry-run     (คำนวณแต่ไม่เขียนฐานข้อมูล)
@@ -43,13 +44,16 @@ OMDB_RECHECK_DAYS = 90         # หนังเก่าที่ OMDb ไม�
 DRY_RUN_OMDB_CALLS = 20        # dry run เรียก OMDb จริงไม่เกินเท่านี้
 OMDB_WORKERS = 15
 BATCH_SIZE = 400
+MIN_TMDB_VOTES = 10           # เหมือนตอนดึงชุดแรก (TMDB discover ใช้ vote_count.gte=10)
+MAX_REMOVE_SHARE = 0.25       # กันพลาด: ถ้าจะลบเกิน 25% ของฐาน ให้ข้ามการลบ
+SCORE_MIN_VOTES = 25000       # m ในสูตรคะแนนถ่วงโหวต (แบบ IMDb Top 250)
 WORKERS = 8
 
 # ฟิลด์ที่ต้องอ่านจาก Firestore เพื่อคำนวณ
 READ_FIELDS = ["imdbRating", "imdbVotes", "tmdbRating", "Metascore", "TomatoScore", "Critics_Average",
                "Audience_Average", "Movie_Critics_SD", "Movie_Audience_SD", "Overall_SD",
                "Recommended_Trust_Side", "Popularity", "tmdbID", "MediaType", "Released", "Year", "Genre_for_cal",
-               "omdbCheckedAt"]
+               "omdbCheckedAt", "tmdbVotes", "Audience_Score", "Critics_Score"]
 SCORE_FIELDS = ["Critics_Average", "Audience_Average", "Movie_Critics_SD", "Movie_Audience_SD",
                 "Overall_SD", "Recommended_Trust_Side"]
 
@@ -164,8 +168,24 @@ class FirestoreStore:
         query = col.select(fields) if fields else col
         return {d.id: d.to_dict() or {} for d in query.stream()}
 
+    def read_doc(self, collection, doc_id):
+        snap = self.db.collection(collection).document(doc_id).get()
+        return snap.to_dict() if snap.exists else None
+
     def read_genres(self):
         return {d.id: d.to_dict() or {} for d in self.db.collection("GENRE_ANALYSIS").stream()}
+
+    def delete(self, collection, doc_ids):
+        col = self.db.collection(collection)
+        batch, n = self.db.batch(), 0
+        for doc_id in doc_ids:
+            batch.delete(col.document(doc_id))
+            n += 1
+            if n >= BATCH_SIZE:
+                batch.commit()
+                batch, n = self.db.batch(), 0
+        if n:
+            batch.commit()
 
     def write(self, collection, docs):
         col = self.db.collection(collection)
@@ -249,12 +269,31 @@ def discover_recent(year, media_type):
 
 
 def find_tmdb(imdb_id):
+    """คืน (tmdb id, ประเภท, จำนวนโหวต TMDB)"""
     data = tmdb_get(f"find/{imdb_id}", external_source="imdb_id")
-    if data.get("movie_results"):
-        return data["movie_results"][0]["id"], "movie"
-    if data.get("tv_results"):
-        return data["tv_results"][0]["id"], "tv"
-    return None, None
+    for key, kind in (("movie_results", "movie"), ("tv_results", "tv")):
+        if data.get(key):
+            r = data[key][0]
+            return r["id"], kind, r.get("vote_count", 0) or 0
+    return None, None, 0
+
+
+def strict_int(v):
+    """แปลง "1,234" / 1234 เป็นตัวเลข — คืน None ถ้าไม่มีค่าหรือแปลงไม่ได้ (ไม่เดาว่าเป็น 0)"""
+    if isinstance(v, bool) or v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return int(v)
+    t = str(v).replace(",", "").strip()
+    return int(t) if t.isdigit() else None
+
+
+def weighted(avg, votes, prior, m=SCORE_MIN_VOTES):
+    """คะแนนถ่วงจำนวนโหวต (สูตรเดียวกับ IMDb Top 250): หนังโหวตน้อยถูกดึงเข้าหาค่ากลางของทั้งฐาน"""
+    if not isinstance(avg, (int, float)) or isinstance(avg, bool):
+        return "N/A"
+    v = max(votes, 0)
+    return round(v / (v + m) * avg + m / (v + m) * prior, 2)
 
 
 def omdb_lookup(imdb_id):
@@ -333,7 +372,7 @@ def algolia_record(doc_id, data):
     return rec
 
 
-def sync_algolia(client, store, updates, firestore_count, today, log=print):
+def sync_algolia(client, store, updates, firestore_count, today, log=print, removed=()):
     """คืน (โหมด, จำนวน record ที่ส่ง)
     แทนที่ทั้ง index ถ้า objectID ไม่ใช่ imdbID / จำนวนต่างเกิน 1% / รอบแรกของเดือน — นอกนั้นอัปเดตเฉพาะเรื่องที่เปลี่ยน"""
     count, sample = client.sample(client.index)
@@ -355,14 +394,14 @@ def sync_algolia(client, store, updates, firestore_count, today, log=print):
         client.wait(client.index, client.operation(tmp, {"operation": "move", "destination": client.index}))
         return "แทนที่ทั้ง index", len(items)
 
-    log(f"Algolia: อัปเดต {len(updates):,} เรื่องที่เปลี่ยน")
-    items = list(updates.items())
+    log(f"Algolia: อัปเดต {len(updates):,} เรื่องที่เปลี่ยน, ลบ {len(removed):,} เรื่อง")
+    reqs = [{"action": "partialUpdateObject", "objectID": k, "body": algolia_record(k, v)} for k, v in updates.items()]
+    reqs += [{"action": "deleteObject", "body": {"objectID": k}} for k in removed]
     task = None
-    for i in range(0, len(items), ALGOLIA_BATCH):
-        task = client.batch(client.index, [{"action": "partialUpdateObject", "objectID": k,
-                                            "body": algolia_record(k, v)} for k, v in items[i: i + ALGOLIA_BATCH]])
+    for i in range(0, len(reqs), ALGOLIA_BATCH):
+        task = client.batch(client.index, reqs[i: i + ALGOLIA_BATCH])
     client.wait(client.index, task)
-    return "อัปเดตทีละเรื่อง", len(items)
+    return "อัปเดตทีละเรื่อง", len(reqs)
 
 
 # ---------------------------------------------------------------
@@ -373,13 +412,26 @@ def run(store, imdb_loader, today, omdb_budget, dry_run=False, log=print, algoli
              "critics_refreshed": 0, "omdb_calls": 0, "omdb_budget": 0, "tmdb_find_calls": 0, "genres_written": 0,
              "backlog_total": 0, "backlog_left": 0, "new_omdb_failed": 0, "refresh_candidates": 0,
              "backfill_candidates": 0, "backfilled": 0, "backfill_left": 0, "docs_written": 0,
-             "algolia_mode": "-", "algolia_records": 0}
+             "algolia_mode": "-", "algolia_records": 0, "new_low_tmdb": 0, "removed_low_tmdb": 0, "scores_written": 0}
 
     movies = store.read_movies(READ_FIELDS)
     stats["existing"] = len(movies)
     log(f"Firestore: {len(movies):,} เรื่อง")
     ratings, eligible = imdb_loader(today)
     log(f"IMDb: {len(ratings):,} เรื่อง, ผ่านเกณฑ์ (โหวต > {MIN_IMDB_VOTES}, {START_YEAR}–{today.year}): {len(eligible):,}")
+
+    # เอาเรื่องที่โหวต TMDB ไม่ถึงเกณฑ์ชุดแรกออก (เฉพาะเรื่องที่มีตัวเลขโหวตจริง — ไม่มีข้อมูลไม่ลบ)
+    low = [i for i, m in movies.items()
+           if strict_int(m.get("tmdbVotes")) is not None and strict_int(m.get("tmdbVotes")) < MIN_TMDB_VOTES]
+    removed = []
+    if low and len(low) > len(movies) * MAX_REMOVE_SHARE:
+        log(f"คำเตือน: เรื่องที่โหวต TMDB < {MIN_TMDB_VOTES} มี {len(low):,} เรื่อง (เกิน {MAX_REMOVE_SHARE:.0%}) — ข้ามการลบเพื่อความปลอดภัย")
+    elif low:
+        removed = low
+        for i in removed:
+            movies.pop(i)
+        log(f"เอาออก {len(removed):,} เรื่องที่โหวต TMDB < {MIN_TMDB_VOTES}")
+    stats["removed_low_tmdb"] = len(removed)
 
     updates = {}           # imdbID -> ฟิลด์ที่ต้องเขียน
     rescore = set()        # เรื่องที่ต้องคำนวณคะแนนใหม่
@@ -471,7 +523,8 @@ def run(store, imdb_loader, today, omdb_budget, dry_run=False, log=print, algoli
                 pos += len(chunk)
                 stats["tmdb_find_calls"] += len(chunk)
                 found = list(ex.map(find_tmdb, chunk))
-                jobs = [(tid, kind) for tid, kind in found if tid]
+                stats["new_low_tmdb"] += sum(1 for tid, _, votes in found if tid and votes < MIN_TMDB_VOTES)
+                jobs = [(tid, kind) for tid, kind, votes in found if tid and votes >= MIN_TMDB_VOTES]
                 for item in ex.map(lambda j: fm.process_single_item({"id": j[0]}, j[1]), jobs):
                     if not item or item["imdbID"] in movies or item["imdbID"] in new_docs:
                         continue
@@ -545,6 +598,28 @@ def run(store, imdb_loader, today, omdb_budget, dry_run=False, log=print, algoli
         if changed:
             put(doc_id, changed)
 
+    # คะแนนถ่วงจำนวนโหวต สำหรับแถว Loved by audiences / critics
+    # ค่ากลาง (prior) คำนวณครั้งแรกแล้วเก็บไว้ที่ META/ranking — ใช้ค่าเดิมทุกสัปดาห์ ไม่ให้คะแนนทั้งฐานขยับตามกันทุกรอบ
+    def prior(field):
+        vals = [m[field] for m in movies.values() if isinstance(m.get(field), (int, float)) and not isinstance(m.get(field), bool)]
+        return round(sum(vals) / len(vals), 1) if vals else 0
+    meta = store.read_doc("META", "ranking") or {}
+    prior_aud = meta.get("priorAudience") if isinstance(meta.get("priorAudience"), (int, float)) else prior("Audience_Average")
+    prior_crit = meta.get("priorCritics") if isinstance(meta.get("priorCritics"), (int, float)) else prior("Critics_Average")
+    meta_update = {} if meta.get("priorAudience") == prior_aud and meta.get("priorCritics") == prior_crit else {
+        "ranking": {"priorAudience": prior_aud, "priorCritics": prior_crit, "minVotes": SCORE_MIN_VOTES,
+                    "createdAt": today.isoformat()}}
+    for doc_id, m in movies.items():
+        votes = strict_int(m.get("imdbVotes")) or 0
+        sc = {"Audience_Score": weighted(m.get("Audience_Average"), votes, prior_aud),
+              "Critics_Score": weighted(m.get("Critics_Average"), votes, prior_crit)}
+        changed = {k: v for k, v in sc.items() if not same_value(m.get(k), v)}
+        if changed:
+            stats["scores_written"] += 1
+            if doc_id in new_docs:
+                new_docs[doc_id].update(changed)
+            put(doc_id, changed)
+
     # 6) GENRE_ANALYSIS จากข้อมูลทั้งฐาน (วิธีเดียวกับ fetch_movies.py)
     raw = {}
     for m in movies.values():
@@ -573,21 +648,28 @@ def run(store, imdb_loader, today, omdb_budget, dry_run=False, log=print, algoli
             log(f"  {doc_id}: {json.dumps(updates[doc_id], ensure_ascii=False)[:300]}")
     else:
         store.write("MOVIES", updates)
+        if removed:
+            store.delete("MOVIES", removed)
         store.write("GENRE_ANALYSIS", genre_updates)
+        if meta_update:
+            store.write("META", meta_update)
         if algolia:
-            mode, n = sync_algolia(algolia, store, updates, len(movies), today, log)
+            mode, n = sync_algolia(algolia, store, updates, len(movies), today, log, removed=removed)
             stats["algolia_mode"], stats["algolia_records"] = mode, n
     return stats
 
 
 SUMMARY_LABELS = [
     ("existing", "เรื่องในฐานก่อนเริ่ม"),
+    ("removed_low_tmdb", f"เอาออก (โหวต TMDB < {MIN_TMDB_VOTES})"),
     ("backlog_total", "เรื่องที่ยังไม่มีในฐาน (โหวต > 500)"), ("added", "เพิ่มเรื่องใหม่"),
+    ("new_low_tmdb", f"เรื่องใหม่ที่ข้าม (โหวต TMDB < {MIN_TMDB_VOTES})"),
     ("new_omdb_failed", "เรื่องใหม่ที่ OMDb ตอบไม่ได้ (รอรอบหน้า)"), ("backlog_left", "เรื่องใหม่ที่รอรอบหน้า"),
     ("imdb_updated", "อัปเดตคะแนน/โหวต IMDb"), ("popularity_updated", "อัปเดต Popularity/คะแนน TMDB"),
     ("refresh_candidates", "หนังที่ออกไม่เกิน 12 เดือน (ตรวจ RT/Metacritic)"), ("critics_refreshed", "อัปเดตคะแนน RT/Metacritic"),
     ("backfill_candidates", "หนังเก่าที่ขาดคะแนนนักวิจารณ์"), ("backfilled", "เติมคะแนนนักวิจารณ์ได้"),
     ("backfill_left", "หนังเก่าที่ยังรอตรวจ"), ("repaired", "ซ่อมค่า 0 → N/A"),
+    ("scores_written", "อัปเดตคะแนนจัดอันดับ (ถ่วงโหวต)"),
     ("docs_written", "document ที่เขียน (MOVIES)"), ("genres_written", "document ที่เขียน (GENRE_ANALYSIS)"),
     ("algolia_mode", "Algolia"), ("algolia_records", "record ที่ส่งเข้า Algolia"),
     ("omdb_calls", "เรียก OMDb"), ("omdb_budget", "งบ OMDb รอบนี้"), ("tmdb_find_calls", "แปลงรหัส IMDb → TMDB"),

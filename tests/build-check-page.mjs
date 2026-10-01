@@ -10,7 +10,7 @@ const NAMES = ["firebaseConfig", "FS_BASE", "FS_TIMEOUT_MS", "DOC_ID", "db", "do
   "startAt", "startAfter", "endAt", "query", "OP_MAP", "toFsValue", "fromFsValue", "fromFsFields", "fieldRef", "makeSnapshot", "fsFetch",
   "cursorValues", "buildStructuredQuery", "getDocs", "getDoc", "GEMINI_PROXY", "GEMINI_PRIMARY_MODEL", "GEMINI_FALLBACK_MODELS", "ALGOLIA",
   "algoliaReady", "PAGE_SIZE", "ALGOLIA_MAX_FILTER_PAGES", "targetCollection", "collectionResolved", "loadedMovies", "detectValidCollection", "detectGenresArray", "detectLatestYear", "hasClientFilters", "loadSearch", "SD_RULES", "latestYear", "VOTE_KEYS", "POPULARITY_KEYS", "TMDBID_KEYS", "KEYWORD_KEYS", "MEDIATYPE_KEYS",
-  "votesField", "mediaField", "mediaServerFilter", "votesNumeric", "hasPopularityField", "VALUE_LABELS", "GENRE_VARIANTS", "GENRE_CANONICAL",
+  "votesField", "mediaField", "mediaServerFilter", "votesNumeric", "hasPopularityField", "hasScoreFields", "VALUE_LABELS", "GENRE_VARIANTS", "GENRE_CANONICAL",
   "genresArrayReady", "THAI_CHAR", "THAI_TONE_MARKS", "idLooksImdb", "toNum", "toNumOrNull", "pickField", "getVotes", "getPopularity",
   "getMediaType", "isSeries", "getKeywords", "getYear", "formatVotes", "getEnglishTitle", "getThaiTitle", "docToMovie", "randomDocId",
   "yearInValues", "genreValues", "canonicalGenre", "legacyGenres", "movieGenres", "GENRE_DISPLAY_TH", "genreLabelTH", "genreDisplay", "genreWhere", "yearsFromFilter", "matchesGenre",

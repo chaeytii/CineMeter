@@ -19,6 +19,7 @@ class FakeStore:
     def __init__(self, movies, genres=None):
         self.movies = {k: dict(v) for k, v in movies.items()}
         self.genres = dict(genres or {})
+        self.meta = {}
         self.writes = {}
 
     def read_movies(self, fields):
@@ -29,11 +30,21 @@ class FakeStore:
     def read_genres(self):
         return dict(self.genres)
 
+    def read_doc(self, collection, doc_id):
+        return dict(self.meta[doc_id]) if collection == "META" and doc_id in self.meta else None
+
+    def delete(self, collection, doc_ids):
+        self.deleted = getattr(self, "deleted", []) + list(doc_ids)
+        for k in doc_ids:
+            self.movies.pop(k, None)
+
     def write(self, collection, docs):
         self.writes.setdefault(collection, {}).update({k: dict(v) for k, v in docs.items()})
         if collection == "MOVIES":
             for k, v in docs.items():
                 self.movies.setdefault(k, {}).update(v)
+        if collection == "META":
+            self.meta.update({k: dict(v) for k, v in docs.items()})
 
 
 class FakeAlgolia:
@@ -105,7 +116,8 @@ class FakeApis:
             imdb_id = path.split("/")[1]
             for (kind, tid), d in self.tmdb.items():
                 if d["external_ids"]["imdb_id"] == imdb_id:
-                    return FakeResponse({"movie_results" if kind == "movie" else "tv_results": [{"id": tid}]})
+                    return FakeResponse({"movie_results" if kind == "movie" else "tv_results":
+                                         [{"id": tid, "vote_count": d.get("vote_count", 0)}]})
             return FakeResponse({"movie_results": [], "tv_results": []})
         if path.startswith("discover/"):
             kind = path.split("/")[1]
@@ -133,10 +145,24 @@ def omdb(meta="70", rt="80%"):
 def existing(imdb_rating="7.0", votes="10,000", tmdb=7.0, meta="70", rt="80%", **extra):
     d = {"imdbRating": imdb_rating, "imdbVotes": votes, "tmdbRating": tmdb, "Metascore": meta, "TomatoScore": rt,
          "Popularity": 10.0, "tmdbID": extra.pop("tmdbID", 1), "MediaType": "ภาพยนตร์", "Released": "2010-01-01",
+         "tmdbVotes": "100",
          "Year": "2010", "Genre_for_cal": "ดราม่า"}
     d.update(wu.score_fields(meta, rt, imdb_rating, tmdb))
     d.update(extra)
     return d
+
+
+def scored(movies):
+    """เติม Audience_Score / Critics_Score ให้เหมือนที่ run() คำนวณ (ใช้กับเทสต์ที่คาดว่าไม่มีอะไรเปลี่ยน)"""
+    def prior(f):
+        vals = [m[f] for m in movies.values() if isinstance(m.get(f), (int, float))]
+        return round(sum(vals) / len(vals), 1) if vals else 0
+    pa, pc = prior("Audience_Average"), prior("Critics_Average")
+    for m in movies.values():
+        v = wu.strict_int(m.get("imdbVotes")) or 0
+        m["Audience_Score"] = wu.weighted(m.get("Audience_Average"), v, pa)
+        m["Critics_Score"] = wu.weighted(m.get("Critics_Average"), v, pc)
+    return movies
 
 
 def ratings_of(**votes_by_id):
@@ -159,7 +185,8 @@ class WeeklyUpdateTest(unittest.TestCase):
                           log=lambda *a: None, algolia=client)
 
     def test_unchanged_titles_are_not_written(self):
-        store = FakeStore({"tt0000001": existing()})
+        store = FakeStore(scored({"tt0000001": existing()}))
+        store.meta["ranking"] = {"priorAudience": 7.0, "priorCritics": 7.5}
         stats = self.run_update(store, ratings_of(tt0000001=("7.0", 10100)), {}, FakeApis({}, {}))
         self.assertEqual(store.writes.get("MOVIES", {}), {})
         self.assertEqual(stats["docs_written"], 0)
@@ -335,9 +362,10 @@ class WeeklyUpdateTest(unittest.TestCase):
         self.assertEqual((stats["algolia_mode"], stats["algolia_records"]), ("แทนที่ทั้ง index", 2))
 
     def test_algolia_incremental_update_only_changed_docs(self):
-        movies = {f"tt00001{i:02d}": existing() for i in range(10)}
+        movies = scored({f"tt00001{i:02d}": existing() for i in range(10)})
         algolia = FakeAlgolia({k: dict(v, imdbID=k) for k, v in movies.items()})
         store = FakeStore(movies)
+        store.meta["ranking"] = {"priorAudience": 7.0, "priorCritics": 7.5}
         ratings = ratings_of(**{k: ("7.0", 10000) for k in movies})
         ratings["tt0000105"] = {"rating": "8.8", "votes_num": 99000, "votes_str": "99,000"}
         stats = self.run_update(store, ratings, {}, FakeApis({}, {}), algolia=algolia, today=dt.date(2026, 10, 12))
@@ -365,6 +393,66 @@ class WeeklyUpdateTest(unittest.TestCase):
         rec = wu.algolia_record("tt1", {"Plot": "ก" * 6000, "Title_EN": "X"})
         self.assertEqual(rec["objectID"], "tt1")
         self.assertLessEqual(len(json.dumps(rec, ensure_ascii=False).encode("utf-8")), wu.ALGOLIA_MAX_RECORD_BYTES)
+
+    # ---------------- เกณฑ์ TMDB ≥ 10 และคะแนนถ่วงโหวต ----------------
+    def test_new_titles_with_few_tmdb_votes_are_skipped(self):
+        low = tmdb_movie(90, "tt9000000"); low["vote_count"] = 3
+        tmdb = {("movie", 90): low, ("movie", 91): tmdb_movie(91, "tt9000001")}
+        apis = FakeApis(tmdb, {"tt9000000": omdb(), "tt9000001": omdb()})
+        store = FakeStore({})
+        stats = self.run_update(store, ratings_of(tt9000000=("9.9", 700), tt9000001=("7.0", 5000)),
+                                {"tt9000000": 2025, "tt9000001": 2025}, apis)
+        self.assertEqual(set(store.writes["MOVIES"]), {"tt9000001"})
+        self.assertEqual(stats["new_low_tmdb"], 1)
+        self.assertNotIn("tt9000000", apis.omdb_calls, "เรื่องที่ไม่ผ่านเกณฑ์ต้องไม่เปลืองโควตา OMDb")
+
+    def test_existing_titles_with_few_tmdb_votes_are_removed(self):
+        movies = {f"tt02{i:05d}": existing() for i in range(9)}
+        movies["tt0299999"] = existing(tmdbVotes="4")
+        movies["tt0288888"] = existing(tmdbVotes="N/A")    # ไม่มีข้อมูล → ห้ามลบ
+        del movies["tt0200000"]["tmdbVotes"]                 # ไม่มีฟิลด์ → ห้ามลบ
+        algolia = FakeAlgolia({k: dict(v, imdbID=k) for k, v in movies.items()})
+        store = FakeStore(movies)
+        stats = self.run_update(store, ratings_of(**{k: ("7.0", 10000) for k in movies}), {}, FakeApis({}, {}),
+                                algolia=algolia, today=dt.date(2026, 10, 12))
+        self.assertEqual(stats["removed_low_tmdb"], 1)
+        self.assertNotIn("tt0299999", store.movies)
+        self.assertIn("tt0288888", store.movies)
+        self.assertIn("tt0200000", store.movies)
+        self.assertNotIn("tt0299999", algolia.indexes[wu.ALGOLIA_INDEX]["records"], "ต้องลบออกจาก Algolia ด้วย")
+
+    def test_removal_skipped_when_suspiciously_many(self):
+        movies = {f"tt03{i:05d}": existing(tmdbVotes="2") for i in range(4)}
+        movies["tt0399999"] = existing()
+        store = FakeStore(movies)
+        stats = self.run_update(store, ratings_of(**{k: ("7.0", 10000) for k in movies}), {}, FakeApis({}, {}))
+        self.assertEqual(stats["removed_low_tmdb"], 0)
+        self.assertEqual(len(store.movies), 5)
+
+    def test_weighted_score_puts_well_known_above_obscure(self):
+        movies = {
+            "tt0400001": existing(imdb_rating="9.8", votes="600", tmdb=9.8),          # โหวตน้อย คะแนนสูงมาก
+            "tt0400002": existing(imdb_rating="8.6", votes="1,000,000", tmdb=8.6),    # หนังดังคะแนนดี
+            "tt0400003": existing(imdb_rating="6.0", votes="50,000", tmdb=6.0),
+        }
+        store = FakeStore(movies)
+        self.run_update(store, ratings_of(tt0400001=("9.8", 600), tt0400002=("8.6", 1000000), tt0400003=("6.0", 50000)),
+                        {}, FakeApis({}, {}))
+        sc = {k: store.movies[k]["Audience_Score"] for k in movies}
+        self.assertGreater(sc["tt0400002"], sc["tt0400001"])
+        self.assertEqual(store.movies["tt0400001"]["Audience_Average"], 9.8, "ค่าที่แสดงบนการ์ดต้องไม่เปลี่ยน")
+        self.assertEqual(wu.weighted("N/A", 1000, 7.0), "N/A")
+        self.assertIn("priorAudience", store.meta["ranking"], "ค่ากลางต้องถูกเก็บไว้ใช้รอบต่อไป")
+
+    def test_prior_is_reused_so_scores_do_not_churn(self):
+        movies = scored({f"tt05{i:05d}": existing() for i in range(10)})
+        store = FakeStore(movies)
+        store.meta["ranking"] = {"priorAudience": 7.0, "priorCritics": 7.5}
+        ratings = ratings_of(**{k: ("7.0", 10000) for k in movies})
+        ratings["tt0500003"] = {"rating": "9.9", "votes_num": 10000, "votes_str": "10,000"}   # ค่าเฉลี่ยทั้งฐานขยับ
+        self.run_update(store, ratings, {}, FakeApis({}, {}))
+        self.assertEqual(set(store.writes["MOVIES"]), {"tt0500003"}, "เรื่องอื่นต้องไม่ถูกเขียนคะแนนใหม่ทั้งฐาน")
+        self.assertNotIn("META", store.writes)
 
 
 if __name__ == "__main__":

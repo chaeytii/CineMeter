@@ -22,7 +22,7 @@ const NAMES = [
   "TRENDING_YEAR_SPAN", "TRENDING_MIN_POPULARITY", "HERO_YEAR_SPAN", "HERO_SCAN", "CACHE_TTL_MS", "SD_RULES", "DISCOVERY",
   "targetCollection", "collectionResolved", "latestYear",
   "VOTE_KEYS", "POPULARITY_KEYS", "TMDBID_KEYS", "KEYWORD_KEYS", "MEDIATYPE_KEYS",
-  "votesField", "mediaField", "mediaServerFilter", "votesNumeric", "hasPopularityField",
+  "votesField", "mediaField", "mediaServerFilter", "votesNumeric", "hasPopularityField", "?hasScoreFields",
   "loadedMovies", "lastVisibleDoc", "exhausted", "loading", "autoPagesLoaded", "requestId", "randomSeedId", "heroPool",
   "searchQuery", "activeFilters", "pageCache", "genreSDCache", "FILTER_LABELS", "VALUE_LABELS",
   "GENRE_VARIANTS", "GENRE_CANONICAL", "GENRE_DISPLAY_TH", "genresArrayReady", "THAI_CHAR", "THAI_TONE_MARKS",

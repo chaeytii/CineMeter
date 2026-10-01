@@ -81,3 +81,5 @@
 | RB-04 | (Midterm TC1) หนังไม่มี Metascore หรือ RT → ไม่นับเป็น 0: แสดง N/A และ Recommend side ยังตัดสินได้ | ✅ | ✅ |
 | SEC-01 | การ์ดหนัง: ค่า Poster ที่มีเครื่องหมาย &quot; ต้องไม่หลุดออกจาก attribute (กัน HTML injection) | ❌ | ✅ |
 | SEC-02 | ข้อความชื่อหนังถูก escape ก่อนใส่ HTML | ✅ | ✅ |
+| BL-WR-01 | มีคะแนนถ่วงโหวต → Loved by audiences เรียงตาม Audience_Score: หนังดังคะแนนดีมาก่อน หนังโหวต 600 ที่ได้ 9.9 ไม่ขึ้นหน้าแรก | ❌ | ✅ |
+| BL-WR-02 | Loved by critics และแผน top ของแชทบอทใช้คะแนนถ่วงโหวตเช่นกัน | ❌ | ✅ |
