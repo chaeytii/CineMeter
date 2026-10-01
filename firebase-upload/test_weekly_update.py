@@ -2,6 +2,7 @@
 # รัน:  python -m unittest test_weekly_update.py   (ในโฟลเดอร์ firebase-upload)
 import datetime as dt
 import json
+import pathlib
 import os
 import sys
 import unittest
@@ -70,6 +71,8 @@ class FakeAlgolia:
                     idx["records"][req["body"]["objectID"]] = dict(req["body"])
                 elif req["action"] == "partialUpdateObject":
                     idx["records"].setdefault(req["objectID"], {}).update(req["body"])
+                elif req["action"] == "deleteObject":
+                    idx["records"].pop(req["body"]["objectID"], None)
             return FakeResponse({"taskID": len(self.calls)})
         if action == "operation":
             dest = self.indexes.setdefault(body["destination"], {"records": {}, "settings": {}})
@@ -453,6 +456,60 @@ class WeeklyUpdateTest(unittest.TestCase):
         self.run_update(store, ratings, {}, FakeApis({}, {}))
         self.assertEqual(set(store.writes["MOVIES"]), {"tt0500003"}, "เรื่องอื่นต้องไม่ถูกเขียนคะแนนใหม่ทั้งฐาน")
         self.assertNotIn("META", store.writes)
+
+    # ---------------- Genres (หลายประเภทต่อเรื่อง) และเพดาน Algolia ----------------
+    def test_genre_table_matches_index_html(self):
+        import re
+        html = pathlib.Path(__file__).resolve().parent.parent.joinpath("index.html").read_text(encoding="utf-8")
+        block = html[html.index("const GENRE_VARIANTS = {"): html.index("};", html.index("const GENRE_VARIANTS = {"))]
+        pairs = {k: re.findall(r'"([^"]+)"', v) for k, v in re.findall(r'"([^"]+)":\s*\[([^\]]*)\]', block)}
+        aliases = set(re.findall(r'"([^"]+)":', html[html.index("const GENRE_CANONICAL"):].split(";")[0]))
+        self.assertEqual({k: v for k, v in pairs.items() if k not in aliases}, wu.GENRE_VARIANTS)
+
+    def test_menu_genres_mapping(self):
+        self.assertEqual(wu.menu_genres(["บู๊, ผจญภัย", "แอนนิเมชั่น"]), ["บู๊", "ผจญ", "แอนนิเมชั่น"])
+        self.assertEqual(wu.menu_genres(["จิตนิมิตแนววิทยาศาสตร์", "ละคร"]), ["จินตนาการ", "นิยายวิทยาศาสตร์", "หนังชีวิต"])
+        self.assertEqual(wu.menu_genres(["ประเภทใหม่"]), ["ประเภทใหม่"])
+
+    def test_new_titles_get_genres_array(self):
+        d = tmdb_movie(60, "tt6000000"); d["genres"] = [{"name": "แอนนิเมชั่น"}, {"name": "ตลก"}]
+        store = FakeStore({})
+        self.run_update(store, ratings_of(tt6000000=("7.5", 9000)), {"tt6000000": 2025},
+                        FakeApis({("movie", 60): d}, {"tt6000000": omdb()}))
+        self.assertEqual(store.writes["MOVIES"]["tt6000000"]["Genres"], ["แอนนิเมชั่น", "ตลก"])
+
+    def test_old_titles_get_genres_only_when_meta_complete(self):
+        d = tmdb_movie(70, "tt0000020"); d["genres"] = [{"name": "สยองขวัญ"}]
+        for complete in (False, True):
+            store = FakeStore({"tt0000020": existing(tmdbID=70)})
+            if complete:
+                store.meta["genres"] = {"complete": True}
+            stats = self.run_update(store, ratings_of(tt0000020=("7.0", 10000)), {}, FakeApis({("movie", 70): d}, {}))
+            got = store.movies["tt0000020"].get("Genres")
+            self.assertEqual(got, ["สยองขวัญ"] if complete else None, f"complete={complete}")
+            self.assertEqual(stats["genres_filled"], 1 if complete else 0)
+
+    def test_algolia_full_replace_respects_record_cap(self):
+        movies = {"tt0000031": existing(votes="1,000"), "tt0000032": existing(votes="900,000"), "tt0000033": existing(votes="50,000")}
+        algolia = FakeAlgolia({"x1": {"imdbID": "tt0000031"}})
+        store = FakeStore(movies)
+        client = wu.AlgoliaClient("APP", "ADMIN", wu.ALGOLIA_INDEX, http=algolia)
+        mode, n = wu.sync_algolia(client, store, {}, store.read_movies(None), dt.date(2026, 10, 12),
+                                  log=lambda *a: None, cap=2)
+        self.assertEqual((mode, n), ("แทนที่ทั้ง index", 2))
+        self.assertEqual(set(algolia.indexes[wu.ALGOLIA_INDEX]["records"]), {"tt0000032", "tt0000033"},
+                         "ต้องเก็บเรื่องที่โหวตมากที่สุด 2 เรื่อง")
+
+    def test_algolia_incremental_drops_titles_outside_cap(self):
+        movies = {"tt0000041": existing(votes="900,000"), "tt0000042": existing(votes="800,000"), "tt0000043": existing(votes="1,000")}
+        algolia = FakeAlgolia({"tt0000041": {"imdbID": "tt0000041"}, "tt0000042": {"imdbID": "tt0000042"}})
+        client = wu.AlgoliaClient("APP", "ADMIN", wu.ALGOLIA_INDEX, http=algolia)
+        mode, _ = wu.sync_algolia(client, FakeStore(movies), {"tt0000041": {"imdbRating": "9.1"}, "tt0000043": {"imdbRating": "5.0"}},
+                                  movies, dt.date(2026, 10, 12), log=lambda *a: None, cap=2)
+        reqs = [r for m, p, b in algolia.calls if p.endswith("/batch") for r in b["requests"]]
+        self.assertEqual(mode, "อัปเดตทีละเรื่อง")
+        self.assertEqual([(r["action"], r.get("objectID") or r["body"]["objectID"]) for r in reqs],
+                         [("partialUpdateObject", "tt0000041"), ("deleteObject", "tt0000043")])
 
 
 if __name__ == "__main__":
