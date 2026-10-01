@@ -8,5 +8,7 @@
 # สร้างใหม่ได้เอง
 node_modules/
 data.json
+firebase_movies_*.json
+firebase_genre_analysis_*.json
 firebase-debug.log
 tests/cinemeter-logic-*

@@ -17,6 +17,7 @@
 | `cinemeter-live-check.html` | หน้าตรวจข้อมูลจริง: สุ่มหนังจากฐานข้อมูล คำนวณคะแนนซ้ำ แล้วเทียบกับค่าที่เก็บไว้ (อ่านอย่างเดียว ไม่แก้ข้อมูล) |
 | `functions/` | Firebase Cloud Function `gemini`: ตัวกลางที่ถือ Gemini API key ไว้ฝั่ง server แชทบอทบนเว็บเรียกผ่านตัวนี้ (รับเฉพาะเว็บของเรา, จำกัดรุ่นโมเดล/ความยาว/จำนวนครั้งต่อนาที) |
 | `firebase.json`, `.firebaserc` | ตั้งค่าให้คำสั่ง `firebase deploy` รู้ว่าจะ deploy `functions/` ขึ้นโปรเจกต์ `movie-858f6` |
+| `firebase-upload/` | สคริปต์เอาข้อมูลหนังขึ้น Firestore (`MOVIES` และ `GENRE_ANALYSIS`) จากไฟล์ JSON ที่สคริปต์ Python สร้างไว้ |
 | `tests/` | ชุดทดสอบอัตโนมัติ 81 ข้อ และผลการทดสอบใน `tests/results/` |
 
 ## ผลการทดสอบ
@@ -37,6 +38,20 @@ cd tests
 ./run-tests.sh v7_8     # ก่อนแก้: ผ่าน 73/81
 ./run-tests.sh v7_9     # ส่งมอบ: ผ่าน 81/81
 ```
+
+## อัปโหลดข้อมูลหนังขึ้น Firestore
+
+วางไฟล์ 3 ไฟล์นี้ไว้ในโฟลเดอร์ `firebase-upload/` (ทั้ง 3 ไฟล์**ห้ามขึ้น GitHub** — `.gitignore` กันไว้แล้ว)
+- `serviceAccountKey.json` — กุญแจแอดมินของ Firebase (Firebase Console → Project settings → Service accounts → Generate new private key)
+- `firebase_movies_1980_2026.json` และ `firebase_genre_analysis_1980_2026.json` — ข้อมูลที่ได้จากสคริปต์ Python
+
+```bash
+cd firebase-upload
+npm install
+node import_all_to_firebase.js
+```
+
+สคริปต์เขียนแบบ merge (เรื่องที่มีอยู่แล้วจะถูกอัปเดต ไม่ถูกลบ) และเขียนทุกเรื่องทุกครั้งที่รัน — ทั้งฐานประมาณ 73,000 writes ต่อรอบ
 
 ## Deploy แชทบอท (Cloud Function)
 
