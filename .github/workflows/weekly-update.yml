@@ -22,7 +22,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
 
@@ -46,6 +46,8 @@ jobs:
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           OMDB_API_KEYS: ${{ secrets.OMDB_API_KEYS }}
+          # งบ OMDb ต่อรอบ: 90% ของ plan Standard (500,000/วัน) — เปลี่ยนได้ที่ Settings → Secrets and variables → Actions → Variables
+          OMDB_DAILY_LIMIT: ${{ vars.OMDB_DAILY_LIMIT || '450000' }}
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
         run: python firebase-upload/weekly_update.py
