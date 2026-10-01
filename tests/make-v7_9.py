@@ -54,6 +54,35 @@ PATCHES = [
     ("KEY-01 Gemini key via Cloud Function (header)",
      'headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },',
      'headers: { "Content-Type": "application/json" },'),
+    # ไม่ใช่บั๊กจากเทสต์: แถว Loved by audiences / critics เรียงด้วยคะแนนถ่วงจำนวนโหวต (Audience_Score / Critics_Score
+    # คำนวณโดย firebase-upload/weekly_update.py) ถ้าข้อมูลยังไม่มีฟิลด์นี้ จะเรียงด้วยค่าเฉลี่ยแบบเดิม
+    ("RANK-01 weighted score state",
+     "        let hasPopularityField = true;\n",
+     "        let hasPopularityField = true;\n"
+     "        let hasScoreFields = false;   // ข้อมูลมีคะแนนถ่วงจำนวนโหวต (Audience_Score / Critics_Score) หรือไม่ — ตั้งค่าใน detectSchema\n"),
+    ("RANK-01 weighted score detect",
+     "            hasPopularityField = samples.some(d => pickField(d, POPULARITY_KEYS) !== undefined);\n",
+     "            hasPopularityField = samples.some(d => pickField(d, POPULARITY_KEYS) !== undefined);\n"
+     "            hasScoreFields = samples.some(d => typeof d.Audience_Score === \"number\");\n"),
+    ("RANK-01 order field (audience)",
+     '            if (mode === "Audience_Average") return "Audience_Average";',
+     '            // คะแนนเฉลี่ยล้วน ๆ ทำให้หนังที่มีคนโหวตไม่กี่ร้อยแต่ได้ 9+ ขึ้นมาก่อนหนังดัง — ใช้คะแนนถ่วงโหวตถ้ามี\n'
+     '            if (mode === "Audience_Average") return hasScoreFields ? "Audience_Score" : "Audience_Average";'),
+    ("RANK-01 order field (critics)",
+     '            if (mode === "Critics_Average") return "Critics_Average";',
+     '            if (mode === "Critics_Average") return hasScoreFields ? "Critics_Score" : "Critics_Average";'),
+    ("RANK-01 client sort (audience)",
+     "                        (toNum(b.Audience_Average) - toNum(a.Audience_Average)));",
+     "                        (toNum(b[rankOrderField(mode)]) - toNum(a[rankOrderField(mode)])));"),
+    ("RANK-01 client sort (critics)",
+     "                        (toNum(b.Critics_Average) - toNum(a.Critics_Average)));",
+     "                        (toNum(b[rankOrderField(mode)]) - toNum(a[rankOrderField(mode)])));"),
+    ("RANK-01 score filter",
+     '            const scoreField = mode === "Audience_Average" || mode === "Critics_Average" ? mode : null;',
+     '            const scoreField = mode === "Audience_Average" || mode === "Critics_Average" ? orderField : null;'),
+    ("RANK-01 chatbot top",
+     '                        [orderBy("Audience_Average", "desc"), limit(25)],',
+     '                        [where(rankOrderField("Audience_Average"), ">=", 0), orderBy(rankOrderField("Audience_Average"), "desc"), limit(25)],'),
 ]
 for name, old, new in PATCHES:
     n = src.count(old)

@@ -9,9 +9,9 @@
 
 ```bash
 cd tests
-./run-tests.sh v7_8     # ก่อนแก้: ผ่าน 73/81
-./run-tests.sh v7_9     # ส่งมอบ: ผ่าน 81/81
-python3 make-v7_9.py ../cinemeter-v7_8.html ../cinemeter-v7_9.html   # สร้าง v7_9 จาก v7_8 ใหม่ (แก้ 9 จุด + ย้าย Gemini key ไป Cloud Function 3 จุด)
+./run-tests.sh v7_8     # ก่อนแก้: ผ่าน 73/83
+./run-tests.sh v7_9     # ส่งมอบ: ผ่าน 83/83
+python3 make-v7_9.py ../cinemeter-v7_8.html ../cinemeter-v7_9.html   # สร้าง v7_9 จาก v7_8 ใหม่ (แก้ 9 จุด + ย้าย Gemini key ไป Cloud Function 3 จุด + จัดอันดับแบบถ่วงโหวต 8 จุด)
 ```
 
 ผลอยู่ใน `results/`: `*-spec.txt` (อ่านง่าย + coverage), `*-junit.xml`, `test-table.md`, ภาพ smoke test
@@ -21,7 +21,7 @@ python3 make-v7_9.py ../cinemeter-v7_8.html ../cinemeter-v7_9.html   # สร้
 | ไฟล์ | หน้าที่ |
 |---|---|
 | `extract.mjs`, `lib-extract.mjs` | ดึงโค้ดจาก HTML → `cinemeter-logic-<version>.mjs` (+ แผนที่เลขบรรทัด `*-map.txt`) |
-| `test/*.test.mjs` | เทสต์ 81 เคส แบ่งกลุ่ม BL / AI / SW / RB / SEC |
+| `test/*.test.mjs` | เทสต์ 83 เคส แบ่งกลุ่ม BL / AI / SW / RB / SEC (`09-weighted-rank` = จัดอันดับแบบถ่วงโหวต) |
 | `helpers/fake-firestore.mjs` | Firestore จำลอง (เทียบชนิดข้อมูลเข้มงวด, error เมื่อไม่มี composite index) |
 | `helpers/dataset.mjs` | ข้อมูลสังเคราะห์รูปแบบเดียวกับ MOVIES |
 | `helpers/dom-stub.mjs` | DOM จำลองสำหรับฟังก์ชันที่แตะหน้าจอ |

@@ -846,6 +846,7 @@
         let mediaServerFilter = false;  // true = ค่าในฐานข้อมูลเป็น "ภาพยนตร์"/"ซีรีส์" ตรง ๆ จึงกรองฝั่ง server ได้
         let votesNumeric = false;
         let hasPopularityField = true;
+        let hasScoreFields = false;   // ข้อมูลมีคะแนนถ่วงจำนวนโหวต (Audience_Score / Critics_Score) หรือไม่ — ตั้งค่าใน detectSchema
 
         let loadedMovies = [];
         let lastVisibleDoc = null;
@@ -1173,6 +1174,7 @@
                 votesNumeric = best[1].numeric === best[1].count;
             }
             hasPopularityField = samples.some(d => pickField(d, POPULARITY_KEYS) !== undefined);
+            hasScoreFields = samples.some(d => typeof d.Audience_Score === "number");
 
             // ประเภทสื่อ: ใช้กรองฝั่ง server ได้ก็ต่อเมื่อชื่อฟิลด์และรูปแบบค่าตรงกับตัวเลือกในเมนูจริง ๆ
             mediaField = MEDIATYPE_KEYS.find(k => samples.some(d => d[k] !== undefined && d[k] !== null && d[k] !== "")) || null;
@@ -1555,8 +1557,9 @@
 
         function rankOrderField(mode) {
             if (mode === "votes") return (votesField && votesNumeric) ? votesField : "Popularity";
-            if (mode === "Audience_Average") return "Audience_Average";
-            if (mode === "Critics_Average") return "Critics_Average";
+            // คะแนนเฉลี่ยล้วน ๆ ทำให้หนังที่มีคนโหวตไม่กี่ร้อยแต่ได้ 9+ ขึ้นมาก่อนหนังดัง — ใช้คะแนนถ่วงโหวตถ้ามี
+            if (mode === "Audience_Average") return hasScoreFields ? "Audience_Score" : "Audience_Average";
+            if (mode === "Critics_Average") return hasScoreFields ? "Critics_Score" : "Critics_Average";
             return hasPopularityField ? "Popularity" : "Audience_Average";
         }
 
@@ -1567,11 +1570,11 @@
                 else if (mode === "Audience_Average") {
                     movies.sort((a, b) =>
                         (trustBoost(b, "audience") - trustBoost(a, "audience")) ||
-                        (toNum(b.Audience_Average) - toNum(a.Audience_Average)));
+                        (toNum(b[rankOrderField(mode)]) - toNum(a[rankOrderField(mode)])));
                 } else if (mode === "Critics_Average") {
                     movies.sort((a, b) =>
                         (trustBoost(b, "critics") - trustBoost(a, "critics")) ||
-                        (toNum(b.Critics_Average) - toNum(a.Critics_Average)));
+                        (toNum(b[rankOrderField(mode)]) - toNum(a[rankOrderField(mode)])));
                 } else movies.sort((a, b) => getPopularity(b) - getPopularity(a));
                 return movies;
             };
@@ -1633,7 +1636,7 @@
             const orderField = rankOrderField(mode);
             const sortFn = rankSorter(mode);
             // โหมดคะแนน: ตัดเรื่องที่ไม่มีคะแนนออก (ให้ผลเหมือนตอน orderBy ฝั่ง server)
-            const scoreField = mode === "Audience_Average" || mode === "Critics_Average" ? mode : null;
+            const scoreField = mode === "Audience_Average" || mode === "Critics_Average" ? orderField : null;
 
             const res = await queryFiltered({
                 f, cursor, sortFn,
@@ -3038,7 +3041,7 @@ genre ให้เลือกจาก: action, drama, scifi, comedy, horror, a
 
                 if (!docs.length && plan.mode === "top") {
                     const snap = await runQuerySafe(
-                        [orderBy("Audience_Average", "desc"), limit(25)],
+                        [where(rankOrderField("Audience_Average"), ">=", 0), orderBy(rankOrderField("Audience_Average"), "desc"), limit(25)],
                         [limit(25)]
                     );
                     docs = snap.docs.map(docToMovie);
