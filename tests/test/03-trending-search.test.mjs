@@ -96,3 +96,13 @@ test("[BL-SE-04] ค้นหาคำที่ไม่มีในฐานข
   const r = await app.loadSearch("zzqxv nothing", null, F({ search: "zzqxv nothing" }));
   assert.equal(r.movies.length, 0);
 });
+
+test("[BL-TR-05] หัวข้อ Trending now แสดงช่วงปีจากน้อยไปมาก (2024–2026)", () => {
+  const saved = { ...app.activeFilters };
+  Object.assign(app.activeFilters, { popular: "popular", genre: "", year: "", media: "" });
+  app.__hooks.set("searchQuery", "");
+  try {
+    app.updateGridHeader();
+    assert.match(document.getElementById("grid-header-title").innerText, /Trending now · 2024–2026/);
+  } finally { Object.assign(app.activeFilters, saved); }
+});

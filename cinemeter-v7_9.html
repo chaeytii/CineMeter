@@ -144,7 +144,10 @@
         .watch-all { font-size: 13px; color: #ff6600; text-decoration: none; font-weight: 400; cursor: pointer; }
         .watch-all:hover { text-decoration: underline; }
 
-        .movie-grid { display: flex; flex-wrap: wrap; gap: 14px; padding: 6px 0 20px 0; justify-content: flex-start; }
+        /* ยืดการ์ดให้เต็มแถวพอดีทุกขนาดจอ (เดิมการ์ดกว้างตายตัว 190px ทางขวาจึงเหลือช่องว่าง) */
+        .movie-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; padding: 6px 0 20px 0; }
+        .movie-grid .movie-card { height: auto; aspect-ratio: 2 / 3; }
+        .movie-grid .no-results { grid-column: 1 / -1; }
         .suggested-grid { display: flex; gap: 10px; overflow-x: auto; padding: 6px 0 20px 0; scroll-behavior: smooth; scrollbar-width: none; }
         .suggested-grid::-webkit-scrollbar { display: none; }
 
@@ -321,6 +324,7 @@
             .recommend-box { border-left: none; padding-left: 0; border-top: 1px solid #233554; padding-top: 14px; }
             .general-grid { grid-template-columns: 1fr; }
             .movie-card { flex: 0 0 calc(50% - 7px); height: 250px; }
+            .movie-grid { grid-template-columns: repeat(2, 1fr); }
             .top10-section, .home-rows { padding-left: 20px; padding-right: 20px; }
             .movie-row .movie-card { flex: 0 0 130px; height: 195px; }
             .top10-rank { font-size: 78px; margin-right: -14px; }
@@ -823,7 +827,8 @@
 
         // เกณฑ์ตัดสิน Recommend Side จากค่า S.D. (ปรับได้)
         const SD_RULES = {
-            equalTol: 0.15,          // ต่างกันไม่เกินนี้ = ความเห็นตรงกัน
+            agreeGap: 1.0,           // ค่าเฉลี่ยคนดูกับนักวิจารณ์ห่างกันไม่เกินนี้ (คะแนนเต็ม 10) = ความเห็นตรงกัน
+            equalTol: 0.15,          // S.D. สองฝั่งต่างกันไม่เกินนี้ = แหล่งคะแนนแต่ละฝั่งน่าเชื่อพอ ๆ กัน
             overallHighAbs: 1.50,    // Overall_SD สูงกว่านี้ = ขัดแย้งหนัก
             overallHighRatio: 1.50   // หรือสูงกว่าค่า S.D. เฉลี่ยของหมวดกี่เท่า
         };
@@ -2203,7 +2208,7 @@
             let title = VALUE_LABELS.popular[activeFilters.popular] || "Discover";
             if (isTrendingMode(snapshotFilters())) {
                 const ys = trendingYears();
-                title += ` · ${ys[0]}–${ys[ys.length - 1]}`;
+                title += ` · ${ys[ys.length - 1]}–${ys[0]}`;   // ปีน้อยไปมาก เช่น 2024–2026 (การ์ดยังเรียงปีใหม่ก่อน)
             }
             if (activeFilters.genre) title += ` · ${VALUE_LABELS.genre[activeFilters.genre] || activeFilters.genre}`;
             if (activeFilters.media) title += ` · ${VALUE_LABELS.media[activeFilters.media] || activeFilters.media}`;
@@ -2233,10 +2238,12 @@
         }
 
         /* -------------------------------------------------------------
-         * Recommend Side — ฟันธงสั้น ๆ จากค่า S.D.
-         *  - SD สองฝั่งใกล้กัน            -> คนดูและนักวิจารณ์ความเห็นตรงกัน
-         *  - SD นักวิจารณ์ต่ำกว่าชัดเจน   -> เชื่อฝั่งนักวิจารณ์
-         *  - SD คนดูต่ำกว่าชัดเจน         -> เชื่อฝั่งคนดู
+         * Recommend Side — ฟันธงสั้น ๆ จากค่าเฉลี่ยและค่า S.D.
+         *  - ค่าเฉลี่ยสองฝั่งห่างกันไม่เกิน 1.0 -> คนดูและนักวิจารณ์ความเห็นตรงกัน
+         *  - ห่างเกิน 1.0 และ SD นักวิจารณ์ต่ำกว่าชัดเจน -> เชื่อฝั่งนักวิจารณ์
+         *  - ห่างเกิน 1.0 และ SD คนดูต่ำกว่าชัดเจน      -> เชื่อฝั่งคนดู
+         *  - ห่างเกิน 1.0 แต่ SD สองฝั่งใกล้กัน          -> สองฝั่งเห็นต่าง: บอกว่าฝั่งไหนชอบมากกว่า
+         *  - ไม่มีค่าเฉลี่ยฝั่งใดฝั่งหนึ่ง -> ใช้กฎ SD แบบเดิม (SD ใกล้กัน = ตรงกัน)
          *  - ขาดข้อมูลฝั่งใดฝั่งหนึ่ง      -> ใช้ Genre_SD ของฝั่งนั้นมาเทียบ
          *  - Overall_SD สูงผิดปกติ        -> ภาพยนตร์เฉพาะกลุ่ม/ความชอบส่วนบุคคล
          *  - ไม่มีข้อมูลเลย               -> ขาดข้อมูลในการตัดสินใจ
@@ -2245,11 +2252,18 @@
             const { overall, genreAudience, genreCritics } = v;
             let critics = v.critics, audience = v.audience;
             let usedGenre = false;
+            // ช่องห่างของค่าเฉลี่ยสองฝั่ง ปัดเศษก่อนเทียบ (7.2 - 6.2 ในเครื่องคิดเป็น 1.0000000000000009)
+            const cAvg = v.criticsAvg ?? null, aAvg = v.audienceAvg ?? null;
+            const gap = cAvg !== null && aAvg !== null ? Math.round(Math.abs(cAvg - aAvg) * 1e6) / 1e6 : null;
+            const gapText = gap !== null ? `ค่าเฉลี่ยสองฝั่งห่างกัน ${gap.toFixed(2)} คะแนน` : "";
+            const agree = () => ({ text: "คนดูและนักวิจารณ์ความเห็นตรงกัน", tone: "agree", note: `${gapText} (ไม่เกิน ${SD_RULES.agreeGap.toFixed(1)})` });
+            const split = note => ({ text: aAvg > cAvg ? "สองฝั่งเห็นต่าง: คนดูชอบมากกว่า" : "สองฝั่งเห็นต่าง: นักวิจารณ์ชอบมากกว่า", tone: "split", note });
 
             if (critics === null && genreCritics !== null) { critics = genreCritics; usedGenre = true; }
             if (audience === null && genreAudience !== null) { audience = genreAudience; usedGenre = true; }
 
             if (critics === null && audience === null) {
+                if (gap !== null) return gap <= SD_RULES.agreeGap ? agree() : split(`${gapText} · ไม่มีค่า S.D. ให้เทียบว่าฝั่งไหนน่าเชื่อกว่า`);
                 return { text: "ขาดข้อมูลในการตัดสินใจ", tone: "muted", note: "ไม่มีค่า S.D. ทั้งสองฝั่ง" };
             }
 
@@ -2266,14 +2280,18 @@
                 }
             }
 
+            // ค่าเฉลี่ยใกล้กัน = ความเห็นตรงกัน ไม่ว่า S.D. จะเป็นเท่าไร
+            if (gap !== null && gap <= SD_RULES.agreeGap) return agree();
             if (critics === null) return { text: "เชื่อฝั่งคนดู", tone: "audience", note: "มีเฉพาะข้อมูลฝั่งคนดู" };
             if (audience === null) return { text: "เชื่อฝั่งนักวิจารณ์", tone: "critics", note: "มีเฉพาะข้อมูลฝั่งนักวิจารณ์" };
 
-            const note = usedGenre ? "ฝั่งที่ขาดข้อมูลใช้ค่า S.D. เฉลี่ยของประเภทแทน" : "";
+            const note = [gapText, usedGenre ? "ฝั่งที่ขาดข้อมูลใช้ค่า S.D. เฉลี่ยของประเภทแทน" : ""].filter(Boolean).join(" · ");
             // ปัดเศษทศนิยมก่อนเทียบ: 0.45 - 0.30 ในเครื่องคิดเป็น 0.15000000000000002 จึงหลุดเกณฑ์ 'ไม่เกิน 0.15'
             const diff = Math.round(Math.abs(critics - audience) * 1e6) / 1e6;
             if (diff <= SD_RULES.equalTol) {
-                return { text: "คนดูและนักวิจารณ์ความเห็นตรงกัน", tone: "agree", note };
+                // ค่าเฉลี่ยห่างเกินเกณฑ์ แต่แหล่งคะแนนทั้งสองฝั่งน่าเชื่อพอ ๆ กัน -> บอกว่าฝั่งไหนชอบมากกว่า
+                if (gap !== null) return split(`${note} · S.D. สองฝั่งใกล้กัน น่าเชื่อพอ ๆ กัน เลือกตามสไตล์ที่ชอบ`);
+                return { text: "คนดูและนักวิจารณ์ความเห็นตรงกัน", tone: "agree", note };   // ไม่มีค่าเฉลี่ยให้เทียบ
             }
             return critics < audience
                 ? { text: "เชื่อฝั่งนักวิจารณ์", tone: "critics", note }
@@ -2282,7 +2300,7 @@
 
         const TONE_COLOR = {
             audience: "#4ade80", critics: "#60a5fa",
-            agree: "#e2e8f0", warn: "#fbbf24", muted: "#8892b0"
+            agree: "#e2e8f0", warn: "#fbbf24", muted: "#8892b0", split: "#fb923c"
         };
 
         // =============================================================
@@ -2426,6 +2444,7 @@
 
             const verdict = decideTrustSide({
                 critics: critSD, audience: audSD, overall: overallSD,
+                criticsAvg: toNumOrNull(movie.Critics_Average), audienceAvg: toNumOrNull(movie.Audience_Average),
                 genreCritics: genreSD.critics, genreAudience: genreSD.audience
             });
             const recEl = document.getElementById("d-recommend");
@@ -2883,10 +2902,11 @@ genre ให้เลือกจาก: action, drama, scifi, comedy, horror, a
 
 วิธีอ่านค่าสถิติของ CineMeter:
 - criticsAverage / audienceAverage = คะแนนเฉลี่ยฝั่งนักวิจารณ์ / คนดู (สเกล 10)
-- S.D. ต่ำ = คะแนนเกาะกลุ่ม ความเห็นตรงกัน เชื่อถือได้ / S.D. สูง = ความเห็นแตก
+- S.D. ของแต่ละฝั่ง = แหล่งคะแนนในฝั่งเดียวกันให้คะแนนใกล้กันแค่ไหน (ต่ำ = เกาะกลุ่ม เชื่อถือได้ / สูง = แหล่งในฝั่งนั้นเห็นไม่ตรงกัน)
+- คนดูกับนักวิจารณ์เห็นตรงกันหรือไม่ ดูจากค่าเฉลี่ยสองฝั่ง: ห่างกันไม่เกิน 1.0 = ตรงกัน, ห่างเกิน 1.0 = เห็นต่าง
 - overall S.D. สูงผิดปกติ = หนังเฉพาะกลุ่ม ขึ้นกับรสนิยมส่วนตัว
 - sd.*Source = "genre_average" แปลว่าหนังเรื่องนี้ไม่มีค่าของตัวเอง ระบบใช้ค่าเฉลี่ยของประเภทหนังแทน ให้บอกผู้ใช้ด้วย
-- recommendSide.verdict = ข้อสรุปของเว็บว่าควรเชื่อฝั่งไหน ให้อธิบายเหตุผลโดยอ้างตัวเลข S.D. ประกอบ
+- recommendSide.verdict = ข้อสรุปของเว็บว่าควรเชื่อฝั่งไหน ให้อธิบายเหตุผลโดยอ้างค่าเฉลี่ยสองฝั่งและตัวเลข S.D. ประกอบ
 
 กติกา:
 1. ตัวเลข ปี ชื่อเรื่อง ที่มาจากข้อมูลที่แนบมา ต้องตรงตามข้อมูลเท่านั้น ห้ามแต่งหรือปัดเปลี่ยน
@@ -2918,6 +2938,7 @@ genre ให้เลือกจาก: action, drama, scifi, comedy, horror, a
             const overallSD = toNumOrNull(movie.Overall_SD);
             const verdict = currentDetail.verdict || decideTrustSide({
                 critics: critSD, audience: audSD, overall: overallSD,
+                criticsAvg: toNumOrNull(movie.Critics_Average), audienceAvg: toNumOrNull(movie.Audience_Average),
                 genreCritics: genreSD.critics, genreAudience: genreSD.audience
             });
             const src = (own, genre) => own !== null ? "movie" : (genre !== null ? "genre_average" : "none");

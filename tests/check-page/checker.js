@@ -229,14 +229,17 @@ async function runVerdicts() {
   try {
     const S = await ensureSample(); const G = await ensureGenres();
     const dist = new Map(), distOld = new Map();
-    let usedGenre = 0, boundary = 0, boundaryChanged = 0, changed = 0, oneSide = 0, oneSideToDataSide = 0, cmpStored = 0, agreeStored = 0;
+    let usedGenre = 0, boundary = 0, boundaryChanged = 0, changed = 0, oneSide = 0, oneSideToDataSide = 0, cmpStored = 0, agreeStored = 0, oldAgreeFar = 0;
     const movieSDs = [], genreSDs = [];
     for (const m of S) {
       const g = G.get(m.Genre_for_cal) || { critics: null, audience: null };
-      const v = { critics: toNumOrNull(m.Movie_Critics_SD), audience: toNumOrNull(m.Movie_Audience_SD), overall: toNumOrNull(m.Overall_SD), genreCritics: g.critics, genreAudience: g.audience };
+      const v = { critics: toNumOrNull(m.Movie_Critics_SD), audience: toNumOrNull(m.Movie_Audience_SD), overall: toNumOrNull(m.Overall_SD), genreCritics: g.critics, genreAudience: g.audience,
+                  criticsAvg: toNumOrNull(m.Critics_Average), audienceAvg: toNumOrNull(m.Audience_Average) };
       const a = decideTrustSide(v), b = decideTrustSide_v78(v);
       dist.set(a.text, (dist.get(a.text) || 0) + 1); distOld.set(b.text, (distOld.get(b.text) || 0) + 1);
       if (a.text !== b.text) changed++;
+      // กฎเดิม (ดูแค่ S.D.) บอกว่า 'ตรงกัน' ทั้งที่ค่าเฉลี่ยสองฝั่งห่างเกิน 1.0 (RULE-02)
+      if (b.text === "คนดูและนักวิจารณ์ความเห็นตรงกัน" && v.criticsAvg !== null && v.audienceAvg !== null && Math.abs(v.criticsAvg - v.audienceAvg) > SD_RULES.agreeGap) oldAgreeFar++;
       if (/ประเภท/.test(a.note || "")) usedGenre++;
       if (v.critics !== null && v.audience !== null && Math.round(Math.abs(v.critics - v.audience) * 100) === Math.round(SD_RULES.equalTol * 100)) { boundary++; if (a.text !== b.text) boundaryChanged++; }
       if ((v.critics === null) !== (v.audience === null) && (g.critics !== null || g.audience !== null)) {
@@ -256,12 +259,13 @@ async function runVerdicts() {
       ["ใช้ S.D. ระดับประเภทแทนฝั่งที่ขาดข้อมูล", `${usedGenre} เรื่อง (${pct(usedGenre, S.length)})`],
       ["อยู่บนเส้นขอบ 0.15 พอดี", `${boundary} เรื่อง · v7_8 จัดผิด ${boundaryChanged} เรื่อง`],
       ["คำตัดสินที่ v7_8 กับ v7_9 ต่างกัน", `${changed} เรื่อง (${pct(changed, S.length)})`],
+      ["กฎเดิมบอกว่า 'ตรงกัน' ทั้งที่ค่าเฉลี่ยห่างเกิน 1.0", `${oldAgreeFar} เรื่อง (${pct(oldAgreeFar, S.length)})`],
       ["มีข้อมูลฝั่งเดียว แล้วระบบชี้ไปฝั่งที่มีข้อมูล", `${oneSideToDataSide}/${oneSide} (${pct(oneSideToDataSide, oneSide)})`],
       ["มัธยฐาน S.D. รายเรื่อง vs S.D. ระดับประเภท", `${f2(ms?.median)} vs ${f2(gs?.median)} (${ms && gs && ms.median ? (gs.median / ms.median).toFixed(1) + " เท่า" : "—"})`],
       ["ตรงกับ Recommended_Trust_Side ที่เก็บไว้ (ใช้จัดอันดับ Loved by…)", `${agreeStored}/${cmpStored} (${pct(agreeStored, cmpStored)})`]]));
     put(id, `<p class="note">ถ้า S.D. ระดับประเภทใหญ่กว่า S.D. รายเรื่องหลายเท่า เรื่องที่ขาดข้อมูลฝั่งหนึ่งจะถูกชี้ไปฝั่งที่มีข้อมูลเกือบทุกครั้ง — ใช้ตัวเลขนี้อ้างในหัวข้อข้อจำกัด</p>`);
     R.verdicts = { sample: S.length, dist: Object.fromEntries(dist), distV78: Object.fromEntries(distOld), usedGenre, boundary, boundaryChanged, changed, oneSide, oneSideToDataSide,
-      medianMovieSD: ms?.median ?? null, medianGenreSD: gs?.median ?? null, storedCompared: cmpStored, storedAgree: agreeStored };
+      medianMovieSD: ms?.median ?? null, medianGenreSD: gs?.median ?? null, storedCompared: cmpStored, storedAgree: agreeStored, oldAgreeFar };
   } catch (e) { fail(id, e); } finally { busy(id, false); }
 }
 
@@ -350,7 +354,8 @@ async function runAI() {
     const S = await ensureSample(); const G = await ensureGenres();
     const base = S.find(m => toNumOrNull(m.Critics_Average) !== null && toNumOrNull(m.Audience_Average) !== null && m.Plot) || S[0];
     const g = G.get(base.Genre_for_cal) || { critics: null, audience: null };
-    const verdict = decideTrustSide({ critics: toNumOrNull(base.Movie_Critics_SD), audience: toNumOrNull(base.Movie_Audience_SD), overall: toNumOrNull(base.Overall_SD), genreCritics: g.critics, genreAudience: g.audience });
+    const verdict = decideTrustSide({ critics: toNumOrNull(base.Movie_Critics_SD), audience: toNumOrNull(base.Movie_Audience_SD), overall: toNumOrNull(base.Overall_SD), genreCritics: g.critics, genreAudience: g.audience,
+                                      criticsAvg: toNumOrNull(base.Critics_Average), audienceAvg: toNumOrNull(base.Audience_Average) });
     const ctx = { id: base.id, title: getEnglishTitle(base), year: getYear(base) || null, genre: base.Genre_for_cal || null, plot: String(base.Plot || "").slice(0, 600), keywords: getKeywords(base).slice(0, 10),
       scores: { criticsAverage: roundOrNull(base.Critics_Average), audienceAverage: roundOrNull(base.Audience_Average), rottenTomatoes: base.TomatoScore ?? null, metascore: base.Metascore ?? null, imdbRating: base.imdbRating ?? null, tmdbRating: base.tmdbRating ?? null },
       sd: { critics: toNumOrNull(base.Movie_Critics_SD), audience: toNumOrNull(base.Movie_Audience_SD), overall: toNumOrNull(base.Overall_SD) }, recommendSide: { verdict: verdict.text, reason: verdict.note || null } };
@@ -397,7 +402,7 @@ function mdSummary() {
   if (R.recompute) { L.push(`## คำนวณซ้ำเพื่อตรวจย้อนกลับ (สุ่ม ${R.recompute.sample} เรื่อง)`, `| ค่า | เทียบได้ | ตรง (สูตรหลัก) | ตรง (สูตรรอง) |`, `|---|---:|---:|---:|`);
     Object.entries(R.recompute.metrics).forEach(([k, v]) => L.push(k.endsWith("Average") ? `| ${k} | ${v.n} | ${v.match} (สเกล 10) | ${v.match100} (สเกล 100) |` : `| ${k} | ${v.n} | ${v.matchPop} (÷n) | ${v.matchSample} (÷n−1) |`)); L.push(``); }
   if (R.verdicts) { const v = R.verdicts; L.push(`## Recommend side บนข้อมูลจริง (สุ่ม ${v.sample} เรื่อง)`, ...Object.entries(v.dist).map(([k, n]) => `- ${k}: ${n} (${pct(n, v.sample)})`),
-    `- ใช้ S.D. ประเภทแทน: ${v.usedGenre} · เส้นขอบ 0.15: ${v.boundary} (v7_8 จัดผิด ${v.boundaryChanged}) · มีข้อมูลฝั่งเดียวแล้วชี้ไปฝั่งที่มีข้อมูล: ${v.oneSideToDataSide}/${v.oneSide}`,
+    `- ใช้ S.D. ประเภทแทน: ${v.usedGenre} · เส้นขอบ 0.15: ${v.boundary} (v7_8 จัดผิด ${v.boundaryChanged}) · มีข้อมูลฝั่งเดียวแล้วชี้ไปฝั่งที่มีข้อมูล: ${v.oneSideToDataSide}/${v.oneSide} · กฎเดิมบอกว่าตรงกันทั้งที่ค่าเฉลี่ยห่างเกิน 1.0: ${v.oldAgreeFar}`,
     `- มัธยฐาน S.D. รายเรื่อง ${f2(v.medianMovieSD)} vs ระดับประเภท ${f2(v.medianGenreSD)} · ตรงกับ Recommended_Trust_Side ที่เก็บไว้ ${v.storedAgree}/${v.storedCompared}`, ``); }
   if (R.filters) L.push(`## ฟิลเตอร์และ index`, `- ${R.filters.combos} ชุดฟิลเตอร์ ผ่านทุกเงื่อนไข: ${R.filters.allPass ? "ใช่" : "ไม่"} · composite index: ${R.filters.indexes.join(", ")}`, ...R.filters.details.map(x => `- ${x}`), ``);
   if (R.algolia) { L.push(`## การค้นหา: แบบเดิม ${R.algolia.passPrefix}/${R.algolia.cases} → Algolia ${R.algolia.pass}/${R.algolia.cases}`, `- Algolia index มี ${R.algolia.indexSize ?? "—"} records${R.algolia.firestoreTotal ? ` (${pct(R.algolia.indexSize, R.algolia.firestoreTotal)} ของ Firestore)` : ""}`, ``, `| คำค้น | ทดสอบ | แบบเดิม | Algolia | 3 อันดับแรก | ms |`, `|---|---|---|---|---|---:|`); R.algolia.rows.forEach(r => L.push(`| ${r.join(" | ")} |`)); L.push(``); }

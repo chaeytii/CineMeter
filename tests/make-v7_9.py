@@ -83,6 +83,90 @@ PATCHES = [
     ("RANK-01 chatbot top",
      '                        [orderBy("Audience_Average", "desc"), limit(25)],',
      '                        [where(rankOrderField("Audience_Average"), ">=", 0), orderBy(rankOrderField("Audience_Average"), "desc"), limit(25)],'),
+    # ไม่ใช่บั๊กจากเทสต์ (ผู้ใช้เห็นจากหน้าเว็บจริง): ตาราง Trending now การ์ดกว้างตายตัว ทางขวาจึงเหลือช่องว่าง
+    ("GRID-01 movie grid fills the row",
+     "        .movie-grid { display: flex; flex-wrap: wrap; gap: 14px; padding: 6px 0 20px 0; justify-content: flex-start; }\n",
+     "        /* ยืดการ์ดให้เต็มแถวพอดีทุกขนาดจอ (เดิมการ์ดกว้างตายตัว 190px ทางขวาจึงเหลือช่องว่าง) */\n"
+     "        .movie-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; padding: 6px 0 20px 0; }\n"
+     "        .movie-grid .movie-card { height: auto; aspect-ratio: 2 / 3; }\n"
+     "        .movie-grid .no-results { grid-column: 1 / -1; }\n"),
+    ("GRID-01 movie grid on phones",
+     "            .movie-card { flex: 0 0 calc(50% - 7px); height: 250px; }\n",
+     "            .movie-card { flex: 0 0 calc(50% - 7px); height: 250px; }\n"
+     "            .movie-grid { grid-template-columns: repeat(2, 1fr); }\n"),
+    ("GRID-01 trending years label",
+     "                title += ` · ${ys[0]}–${ys[ys.length - 1]}`;",
+     "                title += ` · ${ys[ys.length - 1]}–${ys[0]}`;   // ปีน้อยไปมาก เช่น 2024–2026 (การ์ดยังเรียงปีใหม่ก่อน)"),
+    # ไม่ใช่บั๊กจากเทสต์ (ผู้ใช้เห็นจากหน้าเว็บจริง): S.D. บอกแค่ว่าแหล่งคะแนนในฝั่งเดียวกันเห็นตรงกันแค่ไหน
+    # จะสรุปว่าคนดูกับนักวิจารณ์ "เห็นตรงกัน" ต้องดูจากค่าเฉลี่ยสองฝั่ง เช่น Mortal Kombat (2021) นักวิจารณ์ 4.95 คนดู 6.57
+    # S.D. 0.78 กับ 0.66 ต่างกันแค่ 0.12 กฎเดิมจึงบอกว่า "ตรงกัน" ทั้งที่ค่าเฉลี่ยห่างกัน 1.62
+    ("RULE-02 agreement threshold",
+     "            equalTol: 0.15,          // ต่างกันไม่เกินนี้ = ความเห็นตรงกัน\n",
+     "            agreeGap: 1.0,           // ค่าเฉลี่ยคนดูกับนักวิจารณ์ห่างกันไม่เกินนี้ (คะแนนเต็ม 10) = ความเห็นตรงกัน\n"
+     "            equalTol: 0.15,          // S.D. สองฝั่งต่างกันไม่เกินนี้ = แหล่งคะแนนแต่ละฝั่งน่าเชื่อพอ ๆ กัน\n"),
+    ("RULE-02 rule description",
+     "         * Recommend Side — ฟันธงสั้น ๆ จากค่า S.D.\n"
+     "         *  - SD สองฝั่งใกล้กัน            -> คนดูและนักวิจารณ์ความเห็นตรงกัน\n"
+     "         *  - SD นักวิจารณ์ต่ำกว่าชัดเจน   -> เชื่อฝั่งนักวิจารณ์\n"
+     "         *  - SD คนดูต่ำกว่าชัดเจน         -> เชื่อฝั่งคนดู\n",
+     "         * Recommend Side — ฟันธงสั้น ๆ จากค่าเฉลี่ยและค่า S.D.\n"
+     "         *  - ค่าเฉลี่ยสองฝั่งห่างกันไม่เกิน 1.0 -> คนดูและนักวิจารณ์ความเห็นตรงกัน\n"
+     "         *  - ห่างเกิน 1.0 และ SD นักวิจารณ์ต่ำกว่าชัดเจน -> เชื่อฝั่งนักวิจารณ์\n"
+     "         *  - ห่างเกิน 1.0 และ SD คนดูต่ำกว่าชัดเจน      -> เชื่อฝั่งคนดู\n"
+     "         *  - ห่างเกิน 1.0 แต่ SD สองฝั่งใกล้กัน          -> สองฝั่งเห็นต่าง: บอกว่าฝั่งไหนชอบมากกว่า\n"
+     "         *  - ไม่มีค่าเฉลี่ยฝั่งใดฝั่งหนึ่ง -> ใช้กฎ SD แบบเดิม (SD ใกล้กัน = ตรงกัน)\n"),
+    ("RULE-02 average gap",
+     "            let usedGenre = false;\n",
+     "            let usedGenre = false;\n"
+     "            // ช่องห่างของค่าเฉลี่ยสองฝั่ง ปัดเศษก่อนเทียบ (7.2 - 6.2 ในเครื่องคิดเป็น 1.0000000000000009)\n"
+     "            const cAvg = v.criticsAvg ?? null, aAvg = v.audienceAvg ?? null;\n"
+     "            const gap = cAvg !== null && aAvg !== null ? Math.round(Math.abs(cAvg - aAvg) * 1e6) / 1e6 : null;\n"
+     "            const gapText = gap !== null ? `ค่าเฉลี่ยสองฝั่งห่างกัน ${gap.toFixed(2)} คะแนน` : \"\";\n"
+     "            const agree = () => ({ text: \"คนดูและนักวิจารณ์ความเห็นตรงกัน\", tone: \"agree\", note: `${gapText} (ไม่เกิน ${SD_RULES.agreeGap.toFixed(1)})` });\n"
+     "            const split = note => ({ text: aAvg > cAvg ? \"สองฝั่งเห็นต่าง: คนดูชอบมากกว่า\" : \"สองฝั่งเห็นต่าง: นักวิจารณ์ชอบมากกว่า\", tone: \"split\", note });\n"),
+    ("RULE-02 no S.D. but averages known",
+     "            if (critics === null && audience === null) {\n"
+     "                return { text: \"ขาดข้อมูลในการตัดสินใจ\", tone: \"muted\", note: \"ไม่มีค่า S.D. ทั้งสองฝั่ง\" };\n",
+     "            if (critics === null && audience === null) {\n"
+     "                if (gap !== null) return gap <= SD_RULES.agreeGap ? agree() : split(`${gapText} · ไม่มีค่า S.D. ให้เทียบว่าฝั่งไหนน่าเชื่อกว่า`);\n"
+     "                return { text: \"ขาดข้อมูลในการตัดสินใจ\", tone: \"muted\", note: \"ไม่มีค่า S.D. ทั้งสองฝั่ง\" };\n"),
+    ("RULE-02 close averages agree",
+     "            if (critics === null) return { text: \"เชื่อฝั่งคนดู\", tone: \"audience\", note: \"มีเฉพาะข้อมูลฝั่งคนดู\" };\n",
+     "            // ค่าเฉลี่ยใกล้กัน = ความเห็นตรงกัน ไม่ว่า S.D. จะเป็นเท่าไร\n"
+     "            if (gap !== null && gap <= SD_RULES.agreeGap) return agree();\n"
+     "            if (critics === null) return { text: \"เชื่อฝั่งคนดู\", tone: \"audience\", note: \"มีเฉพาะข้อมูลฝั่งคนดู\" };\n"),
+    ("RULE-02 note carries the gap",
+     "            const note = usedGenre ? \"ฝั่งที่ขาดข้อมูลใช้ค่า S.D. เฉลี่ยของประเภทแทน\" : \"\";\n",
+     "            const note = [gapText, usedGenre ? \"ฝั่งที่ขาดข้อมูลใช้ค่า S.D. เฉลี่ยของประเภทแทน\" : \"\"].filter(Boolean).join(\" · \");\n"),
+    ("RULE-02 close S.D. but averages apart",
+     "            if (diff <= SD_RULES.equalTol) {\n"
+     "                return { text: \"คนดูและนักวิจารณ์ความเห็นตรงกัน\", tone: \"agree\", note };\n",
+     "            if (diff <= SD_RULES.equalTol) {\n"
+     "                // ค่าเฉลี่ยห่างเกินเกณฑ์ แต่แหล่งคะแนนทั้งสองฝั่งน่าเชื่อพอ ๆ กัน -> บอกว่าฝั่งไหนชอบมากกว่า\n"
+     "                if (gap !== null) return split(`${note} · S.D. สองฝั่งใกล้กัน น่าเชื่อพอ ๆ กัน เลือกตามสไตล์ที่ชอบ`);\n"
+     "                return { text: \"คนดูและนักวิจารณ์ความเห็นตรงกัน\", tone: \"agree\", note };   // ไม่มีค่าเฉลี่ยให้เทียบ\n"),
+    ("RULE-02 split colour",
+     '            agree: "#e2e8f0", warn: "#fbbf24", muted: "#8892b0"',
+     '            agree: "#e2e8f0", warn: "#fbbf24", muted: "#8892b0", split: "#fb923c"'),
+    ("RULE-02 detail page passes averages",
+     "            const verdict = decideTrustSide({\n"
+     "                critics: critSD, audience: audSD, overall: overallSD,\n",
+     "            const verdict = decideTrustSide({\n"
+     "                critics: critSD, audience: audSD, overall: overallSD,\n"
+     "                criticsAvg: toNumOrNull(movie.Critics_Average), audienceAvg: toNumOrNull(movie.Audience_Average),\n"),
+    ("RULE-02 chatbot context passes averages",
+     "            const verdict = currentDetail.verdict || decideTrustSide({\n"
+     "                critics: critSD, audience: audSD, overall: overallSD,\n",
+     "            const verdict = currentDetail.verdict || decideTrustSide({\n"
+     "                critics: critSD, audience: audSD, overall: overallSD,\n"
+     "                criticsAvg: toNumOrNull(movie.Critics_Average), audienceAvg: toNumOrNull(movie.Audience_Average),\n"),
+    ("RULE-02 chatbot explains the rule",
+     "- S.D. ต่ำ = คะแนนเกาะกลุ่ม ความเห็นตรงกัน เชื่อถือได้ / S.D. สูง = ความเห็นแตก\n",
+     "- S.D. ของแต่ละฝั่ง = แหล่งคะแนนในฝั่งเดียวกันให้คะแนนใกล้กันแค่ไหน (ต่ำ = เกาะกลุ่ม เชื่อถือได้ / สูง = แหล่งในฝั่งนั้นเห็นไม่ตรงกัน)\n"
+     "- คนดูกับนักวิจารณ์เห็นตรงกันหรือไม่ ดูจากค่าเฉลี่ยสองฝั่ง: ห่างกันไม่เกิน 1.0 = ตรงกัน, ห่างเกิน 1.0 = เห็นต่าง\n"),
+    ("RULE-02 chatbot cites averages",
+     "- recommendSide.verdict = ข้อสรุปของเว็บว่าควรเชื่อฝั่งไหน ให้อธิบายเหตุผลโดยอ้างตัวเลข S.D. ประกอบ",
+     "- recommendSide.verdict = ข้อสรุปของเว็บว่าควรเชื่อฝั่งไหน ให้อธิบายเหตุผลโดยอ้างค่าเฉลี่ยสองฝั่งและตัวเลข S.D. ประกอบ"),
 ]
 for name, old, new in PATCHES:
     n = src.count(old)
