@@ -9,8 +9,8 @@
 
 ```bash
 cd tests
-./run-tests.sh v7_8     # ก่อนแก้: ผ่าน 73/83
-./run-tests.sh v7_9     # ส่งมอบ: ผ่าน 83/83
+./run-tests.sh v7_8     # ก่อนแก้: ผ่าน 75/90
+./run-tests.sh v7_9     # ส่งมอบ: ผ่าน 90/90
 python3 make-v7_9.py ../cinemeter-v7_8.html ../cinemeter-v7_9.html   # สร้าง v7_9 จาก v7_8 ใหม่ (แก้ 9 จุด + ย้าย Gemini key ไป Cloud Function 3 จุด + จัดอันดับแบบถ่วงโหวต 8 จุด)
 ```
 
@@ -21,10 +21,10 @@ python3 make-v7_9.py ../cinemeter-v7_8.html ../cinemeter-v7_9.html   # สร้
 | ไฟล์ | หน้าที่ |
 |---|---|
 | `extract.mjs`, `lib-extract.mjs` | ดึงโค้ดจาก HTML → `cinemeter-logic-<version>.mjs` (+ แผนที่เลขบรรทัด `*-map.txt`) |
-| `test/*.test.mjs` | เทสต์ 83 เคส แบ่งกลุ่ม BL / AI / SW / RB / SEC (`09-weighted-rank` = จัดอันดับแบบถ่วงโหวต) |
+| `test/*.test.mjs` | เทสต์ 90 เคส แบ่งกลุ่ม BL / AI / SW / RB / SEC (`09-weighted-rank` = จัดอันดับแบบถ่วงโหวต) |
 | `helpers/fake-firestore.mjs` | Firestore จำลอง (เทียบชนิดข้อมูลเข้มงวด, error เมื่อไม่มี composite index) |
 | `helpers/dataset.mjs` | ข้อมูลสังเคราะห์รูปแบบเดียวกับ MOVIES |
 | `helpers/dom-stub.mjs` | DOM จำลองสำหรับฟังก์ชันที่แตะหน้าจอ |
-| `make-v7_9.py` | แพตช์แก้บั๊กที่พบ + เปลี่ยนแชทบอทให้เรียก Gemini ผ่าน Cloud Function (แต่ละจุดต้องเจอแค่ครั้งเดียว) |
+| `make-v7_9.py` | แพตช์แก้บั๊กที่พบ + เปลี่ยนแชทบอทให้เรียก Gemini ผ่าน Cloud Function + จัดอันดับแบบถ่วงโหวต + กฎ Recommend side จากค่าเฉลี่ย (RULE-02) + ตาราง Trending now เต็มแถว (GRID-01) (แต่ละจุดต้องเจอแค่ครั้งเดียว) |
 | `smoke.py` | เปิดทั้งสองเวอร์ชันใน Chromium ตรวจ JavaScript error |
 | `build-check-page.mjs`, `check-page/` | สร้างหน้า `cinemeter-live-check.html` และทดสอบหน้านั้นกับบริการจำลอง |
