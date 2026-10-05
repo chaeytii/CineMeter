@@ -171,7 +171,6 @@ PATCHES = [
     ("PERS-01 css",
      "        .row-link:hover { color: #ff6600; }\n",
      "        .row-link:hover { color: #ff6600; }\n"
-     "        .row-note { font-size: 12px; color: #8892b0; font-weight: 400; margin-left: 10px; }\n"
      "        .like-btn { margin-top: 12px; background: transparent; border: 1px solid #ff6600; color: #ff6600; border-radius: 999px; padding: 6px 16px; font-size: 14px; cursor: pointer; }\n"
      "        .like-btn[aria-pressed=\"true\"] { background: #ff6600; color: #0a192f; }\n"),
     ("PERS-01 like button",
@@ -297,11 +296,10 @@ PATCHES = [
      "            const link = r.forYou\n"
      "                ? `<span><a class=\"row-link\" onclick=\"openRow('${r.key}')\">ดูทั้งหมด ›</a> <a class=\"row-link\" onclick=\"clearTaste()\">ล้างประวัติ</a></span>`\n"
      "                : `<a class=\"row-link\" onclick=\"openRow('${r.key}')\">ดูทั้งหมด ›</a>`;\n"
-     "            const note = r.forYou ? `<span class=\"row-note\">จากเรื่องที่คุณเปิดดูและกดชอบในเครื่องนี้</span>` : \"\";\n"
      "            return `\n"
      "                <section class=\"home-row\" data-row=\"${r.key}\"${r.forYou ? ` data-genres=\"${escapeHtml(r.genres.join(\"|\"))}\"` : \"\"}>\n"
      "                    <div class=\"section-header\">\n"
-     "                        <span>${escapeHtml(r.title)}${note}</span>\n"
+     "                        <span>${escapeHtml(r.title)}</span>\n"
      "                        ${link}\n"
      "                    </div>\n"
      "                    <div class=\"row-wrap\">\n"
