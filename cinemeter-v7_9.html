@@ -2185,6 +2185,40 @@
         const ROW_SIZE = 18;
         const rowState = new Map();   // key -> "loading" | "done"
 
+        // หน้าแรกไม่แสดงเรื่องเดียวกันซ้ำหลายแถว (เรื่องที่มีหลายประเภทและดังมาก เช่น โดราเอมอน เข้าได้แทบทุกแถว)
+        const homeShown = new Map();     // key -> id ที่แถวนั้นแสดง
+        const homePending = new Map();   // key -> Promise ของแถวที่กำลังโหลด
+        const FAMILY_CARTOON = ["แอนนิเมชั่น", "ครอบครัว"];
+
+        // การ์ตูนครอบครัว (มีทั้งแอนนิเมชันและครอบครัว) ไม่ขึ้นในแถวหมวดอื่นบนหน้าแรก — ตัวกรองประเภทที่ผู้ใช้เลือกเองยังเจอตามปกติ
+        function familyCartoonOutOfPlace(m, genre) {
+            if (!genre || FAMILY_CARTOON.includes(genre)) return false;
+            const gs = movieGenres(m);
+            return FAMILY_CARTOON.every(g => gs.includes(g));
+        }
+
+        // เลือกเรื่องให้แถว: ต้องมีโปสเตอร์ ไม่ซ้ำเรื่องที่แถวด้านบนแสดงแล้ว และอยู่ถูกหมวด
+        function pickRowMovies(list, taken, size, genre) {
+            const ids = new Set(taken), out = [];
+            for (const m of list) {
+                if (!m || !m.Poster || ids.has(m.id) || familyCartoonOutOfPlace(m, genre)) continue;
+                ids.add(m.id);
+                out.push(m);
+                if (out.length >= size) break;
+            }
+            return out;
+        }
+
+        // id ที่แถวด้านบนแสดงไปแล้ว — รอแถวด้านบนที่กำลังโหลดก่อน ผลจึงเหมือนเดิมไม่ว่าแถวไหนโหลดเสร็จก่อน (แถว For you ไม่นับ)
+        async function shownAbove(key) {
+            const rows = homeRowsNow().filter(r => !r.forYou);
+            const above = rows.slice(0, Math.max(0, rows.findIndex(r => r.key === key)));
+            await Promise.all(above.map(r => homePending.get(r.key)).filter(Boolean));
+            const ids = new Set();
+            above.forEach(r => (homeShown.get(r.key) || []).forEach(id => ids.add(id)));
+            return ids;
+        }
+
         function rowFilters(row) {
             return { genre: "", year: "", media: "", popular: "popular", search: "", ...row.f };
         }
@@ -2258,8 +2292,14 @@
             wrap.querySelectorAll(".home-row").forEach(sec => io.observe(sec));
         }
 
-        async function loadHomeRow(key) {
-            if (rowState.get(key)) return;
+        function loadHomeRow(key) {
+            if (rowState.get(key)) return homePending.get(key);
+            const p = loadHomeRowNow(key);
+            homePending.set(key, p);
+            return p;
+        }
+
+        async function loadHomeRowNow(key) {
             rowState.set(key, "loading");
             const row = homeRowsNow().find(r => r.key === key);
             const box = document.getElementById("row-" + key);
@@ -2271,11 +2311,21 @@
                 if (row.forYou) {
                     // ดึงหนังที่คนดูชอบในแต่ละประเภทที่ผู้ใช้ชอบ แล้วสลับกันทีละเรื่อง
                     const lists = [];
-                    for (const g of row.genres) lists.push((await loadRanked(f.popular, null, { ...f, genre: g })).movies);
+                    for (const g of row.genres) lists.push((await loadRanked(f.popular, null, { ...f, genre: g })).movies.filter(m => !familyCartoonOutOfPlace(m, g)));
                     movies = mixForYou(lists, readTaste().seen, ROW_SIZE);
                 } else {
-                    const res = f.popular === "random" ? await loadDiscovery(null, f) : await loadRanked(f.popular, null, f);
-                    movies = res.movies.filter(m => m.Poster).slice(0, ROW_SIZE);
+                    const fetchPage = cursor => f.popular === "random" ? loadDiscovery(cursor, f) : loadRanked(f.popular, cursor, f);
+                    let res = await fetchPage(null);
+                    let list = res.movies.slice();
+                    const taken = await shownAbove(key);
+                    movies = pickRowMovies(list, taken, ROW_SIZE, f.genre);
+                    // ข้ามเรื่องซ้ำจนไม่ครบแถว → ดึงหน้าถัดไปอีกไม่เกิน 2 หน้า
+                    for (let i = 0; i < 2 && movies.length < ROW_SIZE && !res.done && res.cursor; i++) {
+                        res = await fetchPage(res.cursor);
+                        list = list.concat(res.movies);
+                        movies = pickRowMovies(list, taken, ROW_SIZE, f.genre);
+                    }
+                    homeShown.set(key, movies.map(m => m.id));
                 }
                 box.innerHTML = "";
                 movies.forEach(m => box.appendChild(buildCard(m, "", { minimal: true })));

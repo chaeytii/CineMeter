@@ -405,6 +405,71 @@ PATCHES = [
     ('GEN-01 genres comment',
      '         * สร้างโดยสคริปต์ tmdb-genres-migrate.mjs (ดึงประเภทจาก TMDB)\n         * สคริปต์จะเขียน META/genres = { complete: true } เมื่ออัปเดตครบทุกเรื่อง\n',
      '         * firebase-upload/weekly_update.py เติมให้ทุกเรื่องจาก TMDB (ชุดแรกเก็บแค่ประเภทแรกใน Genre_for_cal)\n         * แล้วเขียน META/genres = { complete: true } เมื่อครบทุกเรื่องและ composite index ใน firestore.indexes.json พร้อม\n'),
+    ('HOME-02 row helpers',
+     '        const rowState = new Map();   // key -> "loading" | "done"\n',
+     '        const rowState = new Map();   // key -> "loading" | "done"\n'
+     '\n'
+     '        // หน้าแรกไม่แสดงเรื่องเดียวกันซ้ำหลายแถว (เรื่องที่มีหลายประเภทและดังมาก เช่น โดราเอมอน เข้าได้แทบทุกแถว)\n'
+     '        const homeShown = new Map();     // key -> id ที่แถวนั้นแสดง\n'
+     '        const homePending = new Map();   // key -> Promise ของแถวที่กำลังโหลด\n'
+     '        const FAMILY_CARTOON = ["แอนนิเมชั่น", "ครอบครัว"];\n'
+     '\n'
+     '        // การ์ตูนครอบครัว (มีทั้งแอนนิเมชันและครอบครัว) ไม่ขึ้นในแถวหมวดอื่นบนหน้าแรก — ตัวกรองประเภทที่ผู้ใช้เลือกเองยังเจอตามปกติ\n'
+     '        function familyCartoonOutOfPlace(m, genre) {\n'
+     '            if (!genre || FAMILY_CARTOON.includes(genre)) return false;\n'
+     '            const gs = movieGenres(m);\n'
+     '            return FAMILY_CARTOON.every(g => gs.includes(g));\n'
+     '        }\n'
+     '\n'
+     '        // เลือกเรื่องให้แถว: ต้องมีโปสเตอร์ ไม่ซ้ำเรื่องที่แถวด้านบนแสดงแล้ว และอยู่ถูกหมวด\n'
+     '        function pickRowMovies(list, taken, size, genre) {\n'
+     '            const ids = new Set(taken), out = [];\n'
+     '            for (const m of list) {\n'
+     '                if (!m || !m.Poster || ids.has(m.id) || familyCartoonOutOfPlace(m, genre)) continue;\n'
+     '                ids.add(m.id);\n'
+     '                out.push(m);\n'
+     '                if (out.length >= size) break;\n'
+     '            }\n'
+     '            return out;\n'
+     '        }\n'
+     '\n'
+     '        // id ที่แถวด้านบนแสดงไปแล้ว — รอแถวด้านบนที่กำลังโหลดก่อน ผลจึงเหมือนเดิมไม่ว่าแถวไหนโหลดเสร็จก่อน (แถว For you ไม่นับ)\n'
+     '        async function shownAbove(key) {\n'
+     '            const rows = homeRowsNow().filter(r => !r.forYou);\n'
+     '            const above = rows.slice(0, Math.max(0, rows.findIndex(r => r.key === key)));\n'
+     '            await Promise.all(above.map(r => homePending.get(r.key)).filter(Boolean));\n'
+     '            const ids = new Set();\n'
+     '            above.forEach(r => (homeShown.get(r.key) || []).forEach(id => ids.add(id)));\n'
+     '            return ids;\n'
+     '        }\n'),
+    ('HOME-02 track pending rows',
+     '        async function loadHomeRow(key) {\n            if (rowState.get(key)) return;\n',
+     '        function loadHomeRow(key) {\n'
+     '            if (rowState.get(key)) return homePending.get(key);\n'
+     '            const p = loadHomeRowNow(key);\n'
+     '            homePending.set(key, p);\n'
+     '            return p;\n'
+     '        }\n'
+     '\n'
+     '        async function loadHomeRowNow(key) {\n'),
+    ('HOME-02 For you skips out-of-place cartoons',
+     '{ ...f, genre: g })).movies);\n',
+     '{ ...f, genre: g })).movies.filter(m => !familyCartoonOutOfPlace(m, g)));\n'),
+    ('HOME-02 genre rows skip repeats',
+     '                    const res = f.popular === "random" ? await loadDiscovery(null, f) : await loadRanked(f.popular, null, f);\n'
+     '                    movies = res.movies.filter(m => m.Poster).slice(0, ROW_SIZE);\n',
+     '                    const fetchPage = cursor => f.popular === "random" ? loadDiscovery(cursor, f) : loadRanked(f.popular, cursor, f);\n'
+     '                    let res = await fetchPage(null);\n'
+     '                    let list = res.movies.slice();\n'
+     '                    const taken = await shownAbove(key);\n'
+     '                    movies = pickRowMovies(list, taken, ROW_SIZE, f.genre);\n'
+     '                    // ข้ามเรื่องซ้ำจนไม่ครบแถว → ดึงหน้าถัดไปอีกไม่เกิน 2 หน้า\n'
+     '                    for (let i = 0; i < 2 && movies.length < ROW_SIZE && !res.done && res.cursor; i++) {\n'
+     '                        res = await fetchPage(res.cursor);\n'
+     '                        list = list.concat(res.movies);\n'
+     '                        movies = pickRowMovies(list, taken, ROW_SIZE, f.genre);\n'
+     '                    }\n'
+     '                    homeShown.set(key, movies.map(m => m.id));\n'),
 ]
 for name, old, new in PATCHES:
     n = src.count(old)
