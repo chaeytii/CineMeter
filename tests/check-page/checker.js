@@ -388,6 +388,128 @@ async function runAI() {
 }
 
 /* ---------------- summary ---------------- */
+/* ---------------- 0) EDA — สำรวจข้อมูลก่อนวิเคราะห์ ---------------- */
+// สี: นักวิจารณ์ = ส้ม, คนดู = ฟ้า (ผ่าน validate_palette บนพื้น #0b1a30: CVD ΔE 26.8)
+const C_CRIT = "#d95926", C_AUD = "#3987e5", C_NEUTRAL = "#8fa3bf";
+const svgEsc = s => esc(s);
+function niceMax(v) { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)); return Math.ceil(v / p) * p; }
+// คอลัมน์แนวตั้ง: series = [{name,color,values[]}], labels = ชื่อแต่ละกลุ่ม
+function svgColumns({ labels, series, yLabel, w = 720, h = 260, fmt = v => String(v) }) {
+  const L = 48, B = 34, T = 14, Rm = 8, pw = w - L - Rm, ph = h - T - B;
+  const max = niceMax(Math.max(1, ...series.flatMap(s => s.values)) / 4) * 4;   // 4 ช่องเท่ากัน ตัวเลขลงตัว
+  const gw = pw / labels.length, bw = Math.max(2, (gw - 4) / series.length - 2);
+  let g = "";
+  for (let i = 0; i <= 4; i++) { const y = T + ph - ph * i / 4; g += `<line x1="${L}" x2="${w - Rm}" y1="${y}" y2="${y}" stroke="#1f3354"/><text x="${L - 6}" y="${y + 4}" text-anchor="end" class="ax">${fmt(max * i / 4)}</text>`; }
+  labels.forEach((lab, i) => {
+    series.forEach((s, k) => {
+      const v = s.values[i] || 0, bh = ph * v / max, x = L + i * gw + 2 + k * (bw + 2), y = T + ph - bh;
+      if (v > 0) g += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="2" fill="${s.colorAt ? s.colorAt(i) : s.color}"><title>${svgEsc(s.name)} · ${svgEsc(lab)}: ${fmt(v)}</title></rect>`;
+    });
+    if (labels.length <= 12 || i % 2 === 0) g += `<text x="${(L + i * gw + gw / 2).toFixed(1)}" y="${h - B + 16}" text-anchor="middle" class="ax">${svgEsc(lab)}</text>`;
+  });
+  g += `<text x="12" y="${T + ph / 2}" transform="rotate(-90 12 ${T + ph / 2})" text-anchor="middle" class="ax">${svgEsc(yLabel)}</text>`;
+  return `<svg viewBox="0 0 ${w} ${h}" class="chart" role="img">${g}</svg>`;
+}
+// แท่งแนวนอนรอบศูนย์ (ค่าบวก/ลบ) หรือเริ่มที่ 0 (ค่าบวกอย่างเดียว)
+function svgBars({ rows, w = 720, fmt = v => v.toFixed(2), signed = false, colorOf }) {
+  const rowH = 24, T = 6, LW = 170, Rm = 60, h = T * 2 + rows.length * rowH, pw = w - LW - Rm;
+  const max = Math.max(0.01, ...rows.map(r => Math.abs(r.value)));
+  const x0 = signed ? LW + pw / 2 : LW, scale = (signed ? pw / 2 : pw) / max;
+  let g = signed ? `<line x1="${x0}" x2="${x0}" y1="0" y2="${h}" stroke="#8fa3bf" stroke-dasharray="3 3"/>` : "";
+  rows.forEach((r, i) => {
+    const y = T + i * rowH, len = Math.abs(r.value) * scale, x = r.value >= 0 ? x0 : x0 - len;
+    g += `<text x="${LW - 8}" y="${y + 16}" text-anchor="end" class="lb">${svgEsc(r.label)}</text>`;
+    g += `<rect x="${x.toFixed(1)}" y="${y + 4}" width="${Math.max(1, len).toFixed(1)}" height="${rowH - 8}" rx="3" fill="${colorOf(r)}"><title>${svgEsc(r.label)}: ${fmt(r.value)}${r.n ? ` (n=${r.n})` : ""}</title></rect>`;
+    const tx = r.value >= 0 ? x + len + 6 : x - 6;
+    g += `<text x="${tx.toFixed(1)}" y="${y + 16}" text-anchor="${r.value >= 0 ? "start" : "end"}" class="vl">${fmt(r.value)}</text>`;
+  });
+  return `<svg viewBox="0 0 ${w} ${h}" class="chart" role="img">${g}</svg>`;
+}
+const legend = items => `<div class="legend">${items.map(([n, c]) => `<span><i style="background:${c}"></i>${esc(n)}</span>`).join("")}</div>`;
+function chartBox(id, title, svg, note = "") {
+  return `<figure class="fig" id="fig-${id}"><figcaption>${esc(title)}</figcaption>${svg}${note}<div class="row"><button type="button" class="mini" data-png="fig-${id}">ดาวน์โหลด PNG</button></div></figure>`;
+}
+async function svgToPng(fig) {
+  const svg = fig.querySelector("svg"); const vb = svg.viewBox.baseVal; const scale = 2;
+  const clone = svg.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg"); clone.setAttribute("width", vb.width); clone.setAttribute("height", vb.height);
+  clone.insertAdjacentHTML("afterbegin", `<style>text{font:12px Inter,'IBM Plex Sans Thai',sans-serif;fill:#8fa3bf}.lb{fill:#e6edf7}.vl{fill:#e6edf7}</style><rect width="100%" height="100%" fill="#0b1a30"/>`);
+  const img = new Image(); img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(clone));
+  await img.decode();
+  const c = document.createElement("canvas"); c.width = vb.width * scale; c.height = vb.height * scale;
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  const a = document.createElement("a"); a.href = c.toDataURL("image/png"); a.download = `cinemeter-${fig.id}.png`; a.click();
+}
+document.addEventListener("click", e => { const b = e.target.closest("[data-png]"); if (b) svgToPng(document.getElementById(b.dataset.png)).catch(err => alert(err.message)); });
+
+function edaStats(S) {
+  const num = (m, k) => toNumOrNull(m[k]);
+  const both = S.map(m => ({ m, c: num(m, "Critics_Average"), a: num(m, "Audience_Average") })).filter(x => x.c !== null && x.a !== null);
+  const bins = Array.from({ length: 20 }, (_, i) => i * 0.5);
+  const hist = vals => bins.map(b => vals.filter(v => v >= b && (v < b + 0.5 || (b === 9.5 && v <= 10))).length);
+  const critVals = S.map(m => num(m, "Critics_Average")).filter(v => v !== null), audVals = S.map(m => num(m, "Audience_Average")).filter(v => v !== null);
+  const gaps = both.map(x => Math.round((x.a - x.c) * 100) / 100);
+  const gapBins = Array.from({ length: 16 }, (_, i) => -4 + i * 0.5);
+  const gapHist = gapBins.map((b, i) => gaps.filter(g => (i === 0 ? g < b + 0.5 : i === gapBins.length - 1 ? g >= b : g >= b && g < b + 0.5)).length);
+  let r = null;
+  if (both.length > 2) { const mc = mean(both.map(x => x.c)), ma = mean(both.map(x => x.a)); let sxy = 0, sxx = 0, syy = 0;
+    both.forEach(x => { sxy += (x.c - mc) * (x.a - ma); sxx += (x.c - mc) ** 2; syy += (x.a - ma) ** 2; }); r = sxx && syy ? sxy / Math.sqrt(sxx * syy) : null; }
+  const byGenre = new Map();
+  both.forEach(x => { const g = movieGenres(x.m)[0]; if (!g) return; const k = canonicalGenre(g); const e = byGenre.get(k) || []; e.push(x.a - x.c); byGenre.set(k, e); });
+  const genreRows = [...byGenre].filter(([, v]) => v.length >= 10).map(([g, v]) => ({ label: genreLabelTH(g), value: mean(v), n: v.length }))
+    .sort((p, q) => Math.abs(q.value) - Math.abs(p.value)).slice(0, 12);
+  const FIELDS = [["Critics_Average", "ค่าเฉลี่ยนักวิจารณ์"], ["Audience_Average", "ค่าเฉลี่ยคนดู"], ["TomatoScore", "Rotten Tomatoes"], ["Metascore", "Metacritic"], ["imdbRating", "IMDb"], ["tmdbRating", "TMDb"], ["Poster", "โปสเตอร์"], ["Plot", "เรื่องย่อ"]];
+  const missing = FIELDS.map(([k, label]) => { const miss = S.filter(m => { const v = m[k]; return v === undefined || v === null || v === "" || v === "N/A" || v === 0; }).length; return { label, value: 100 * miss / S.length, n: miss }; });
+  const VB = [[0, 5000, "< 5K"], [5000, 20000, "5K–20K"], [20000, 100000, "20K–100K"], [100000, 500000, "100K–500K"], [500000, Infinity, "≥ 500K"]];
+  const votes = VB.map(([lo, hi, label]) => { const v = both.filter(x => { const n = getVotes(x.m) || 0; return n >= lo && n < hi; }).map(x => Math.abs(x.a - x.c)); return { label, value: v.length ? mean(v) : 0, n: v.length }; });
+  const gCount = S.map(m => Array.isArray(m.Genres) ? m.Genres.length : null).filter(v => v !== null);
+  return { n: S.length, nBoth: both.length, bins, critHist: hist(critVals), audHist: hist(audVals), critMean: critVals.length ? mean(critVals) : null, audMean: audVals.length ? mean(audVals) : null,
+    gaps, gapBins, gapHist, gapMean: gaps.length ? mean(gaps) : null, gapMedian: gaps.length ? stat(gaps)?.median ?? null : null, gapOver1: gaps.filter(g => Math.abs(g) > 1).length,
+    audHigher: gaps.filter(g => g > 0).length, r, genreRows, missing, votes, withGenres: gCount.length, multiGenre: gCount.filter(c => c > 1).length };
+}
+
+async function runEDA() {
+  const id = "eda"; clear(id); busy(id, true);
+  try {
+    const S = await ensureSample();
+    const e = edaStats(S);
+    put(id, table(["ตัวชี้วัด", "ค่า"], [
+      ["จำนวนเรื่องที่สุ่ม / มีคะแนนครบ 2 ฝั่ง", `${e.n} / ${e.nBoth} (${pct(e.nBoth, e.n)})`],
+      ["ค่าเฉลี่ยนักวิจารณ์ / คนดู", `${f2(e.critMean)} / ${f2(e.audMean)}`],
+      ["ช่องห่าง (คนดู − นักวิจารณ์) เฉลี่ย / มัธยฐาน", `${f2(e.gapMean)} / ${f2(e.gapMedian)}`],
+      ["คนดูให้สูงกว่านักวิจารณ์", `${e.audHigher} เรื่อง (${pct(e.audHigher, e.nBoth)})`],
+      ["ค่าเฉลี่ยสองฝั่งห่างเกิน 1.0 (เกณฑ์ \"เห็นต่าง\")", `${e.gapOver1} เรื่อง (${pct(e.gapOver1, e.nBoth)})`],
+      ["สหสัมพันธ์ (Pearson r) ระหว่างสองฝั่ง", f2(e.r)],
+      ["หนังที่มีหลายประเภท (จากรายชื่อ Genres)", e.withGenres ? `${e.multiGenre}/${e.withGenres} (${pct(e.multiGenre, e.withGenres)})` : "ยังไม่มีฟิลด์ Genres ในตัวอย่าง"]]));
+    put(id, chartBox("dist", "การกระจายคะแนนเฉลี่ย (เต็ม 10) — นักวิจารณ์ vs คนดู",
+      svgColumns({ labels: e.bins.map(b => b.toFixed(1)), series: [{ name: "นักวิจารณ์", color: C_CRIT, values: e.critHist }, { name: "คนดู", color: C_AUD, values: e.audHist }], yLabel: "จำนวนเรื่อง" }),
+      legend([["นักวิจารณ์", C_CRIT], ["คนดู", C_AUD]])));
+    put(id, chartBox("gap", "ช่องห่างคะแนน (คนดู − นักวิจารณ์): ขวา = คนดูชอบกว่า, ซ้าย = นักวิจารณ์ชอบกว่า",
+      svgColumns({ labels: e.gapBins.map((b, i) => i === 0 ? `≤${(b + 0.5).toFixed(1)}` : i === e.gapBins.length - 1 ? `≥${b.toFixed(1)}` : b.toFixed(1)),
+        series: [{ name: "จำนวนเรื่อง", color: C_NEUTRAL, values: e.gapHist, colorAt: i => e.gapBins[i] >= 1 ? C_AUD : e.gapBins[i] < -1 ? C_CRIT : C_NEUTRAL }], yLabel: "จำนวนเรื่อง" }),
+      legend([["คนดูให้สูงกว่าเกิน 1.0", C_AUD], ["ห่างไม่เกิน 1.0 (เห็นตรงกัน)", C_NEUTRAL], ["นักวิจารณ์ให้สูงกว่าเกิน 1.0", C_CRIT]]) +
+      `<p class="note">เส้นเกณฑ์ ±1.0 คือจุดที่เว็บเริ่มบอกว่า "สองฝั่งเห็นต่าง" (RULE-02) — เกิน ±1.0 มี ${e.gapOver1} เรื่อง (${pct(e.gapOver1, e.nBoth)})</p>`));
+    if (e.genreRows.length) put(id, chartBox("genre", "ช่องห่างเฉลี่ยแยกตามประเภท (ประเภทที่มี ≥ 10 เรื่องในตัวอย่าง, 12 อันดับแรก)",
+      svgBars({ rows: e.genreRows, signed: true, fmt: v => (v > 0 ? "+" : "") + v.toFixed(2), colorOf: r => r.value >= 0 ? C_AUD : C_CRIT }),
+      legend([["คนดูให้สูงกว่า", C_AUD], ["นักวิจารณ์ให้สูงกว่า", C_CRIT]])));
+    else put(id, `<p class="note">ยังไม่มีประเภทที่มีตัวอย่างครบ 10 เรื่อง — เพิ่มจำนวนสุ่ม (เช่น 1,000) แล้วกดสุ่มใหม่</p>`);
+    put(id, chartBox("missing", "สัดส่วนข้อมูลที่ขาด (%) แยกตามฟิลด์",
+      svgBars({ rows: e.missing, fmt: v => v.toFixed(1) + "%", colorOf: () => C_NEUTRAL })));
+    put(id, chartBox("votes", "ช่องห่างเฉลี่ย |คนดู − นักวิจารณ์| ตามจำนวนโหวต IMDb",
+      svgBars({ rows: e.votes, fmt: v => v.toFixed(2), colorOf: () => C_NEUTRAL }),
+      `<p class="note">${e.votes.map(v => `${v.label}: n=${v.n}`).join(" · ")}</p>`));
+    put(id, `<details><summary>ตารางข้อมูลของกราฟ</summary>${table(["ประเภท", "ช่องห่างเฉลี่ย", "n"], e.genreRows.map(r => [esc(r.label), f2(r.value), String(r.n)]))}${table(["ฟิลด์", "ขาด %", "เรื่อง"], e.missing.map(r => [esc(r.label), f2(r.value, 1), String(r.n)]))}</details>`);
+    put(id, `<div class="row"><button type="button" id="btn-eda-csv">ดาวน์โหลด CSV ตัวอย่าง</button></div>`);
+    $("#btn-eda-csv").addEventListener("click", () => {
+      const rows = [["imdbID", "Year", "Genre", "Critics_Average", "Audience_Average", "Gap", "imdbVotes"], ...S.map(m => [m.id, getYear(m) ?? "", movieGenres(m)[0] || "", toNumOrNull(m.Critics_Average) ?? "", toNumOrNull(m.Audience_Average) ?? "",
+        toNumOrNull(m.Critics_Average) !== null && toNumOrNull(m.Audience_Average) !== null ? (toNumOrNull(m.Audience_Average) - toNumOrNull(m.Critics_Average)).toFixed(2) : "", getVotes(m) || ""])];
+      download("cinemeter-eda-sample.csv", rows.map(r => r.map(x => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n"), "text/csv");
+    });
+    R.eda = { sample: e.n, both: e.nBoth, critMean: e.critMean, audMean: e.audMean, gapMean: e.gapMean, gapMedian: e.gapMedian, audHigher: e.audHigher, gapOver1: e.gapOver1, r: e.r,
+      multiGenre: e.multiGenre, withGenres: e.withGenres, genreRows: e.genreRows, missing: e.missing, votes: e.votes };
+  } catch (err) { fail(id, err); } finally { busy(id, false); }
+}
+
 function mdSummary() {
   const L = [`# CineMeter — ผลตรวจข้อมูลจริง`, ``, `รันเมื่อ: ${new Date().toLocaleString("th-TH")} · หน้าตรวจสร้างจาก ${APP_VERSION}`, ``];
   const d = R.dataset;
@@ -396,6 +518,11 @@ function mdSummary() {
     Object.entries(d.fields).forEach(([k, v]) => L.push(`| ${k} | ${v.usable ?? "—"} | ${v.pctUsable ?? "—"} | ${v.naStrings ?? "—"} | ${v.nonNumeric ?? "—"} |`));
     L.push(``, `ต่อทศวรรษ: ${Object.entries(d.decades).map(([k, v]) => `${k}=${v}`).join(", ")} · ประเภทสื่อ: ${Object.entries(d.media).map(([k, v]) => `${k}=${v}`).join(", ")}`, ``);
   }
+  if (R.eda) { const e = R.eda; L.push(`## EDA (สุ่ม ${e.sample} เรื่อง, มีคะแนนครบ 2 ฝั่ง ${e.both})`, `- ค่าเฉลี่ยนักวิจารณ์ ${f2(e.critMean)} · คนดู ${f2(e.audMean)} · ช่องห่าง (คนดู − นักวิจารณ์) เฉลี่ย ${f2(e.gapMean)} มัธยฐาน ${f2(e.gapMedian)}`,
+    `- คนดูให้สูงกว่า ${e.audHigher} เรื่อง (${pct(e.audHigher, e.both)}) · ห่างเกิน 1.0: ${e.gapOver1} (${pct(e.gapOver1, e.both)}) · Pearson r = ${f2(e.r)} · หลายประเภท ${e.multiGenre}/${e.withGenres}`,
+    `- ช่องห่างตามประเภท: ${e.genreRows.map(r => `${r.label} ${r.value > 0 ? "+" : ""}${f2(r.value)} (n=${r.n})`).join(", ")}`,
+    `- ข้อมูลขาด: ${e.missing.map(r => `${r.label} ${f2(r.value, 1)}%`).join(", ")}`,
+    `- |ช่องห่าง| ตามโหวต: ${e.votes.map(v => `${v.label} ${f2(v.value)} (n=${v.n})`).join(", ")}`, ``); }
   if (R.latency) { const l = R.latency; L.push(`## ความเร็ว (ms)`, `- Firestore โหลด 40 เรื่อง: มัธยฐาน ${f2(l.firestoreList?.median, 0)}, p95 ${f2(l.firestoreList?.p95, 0)} (ครั้งแรก ${f2(l.firestoreListCold, 0)})`, `- Firestore เปิด 1 เรื่อง: มัธยฐาน ${f2(l.firestoreDoc?.median, 0)}`, `- Algolia ค้นหา: มัธยฐาน ${f2(l.algolia?.median, 0)}, p95 ${f2(l.algolia?.p95, 0)} (ครั้งแรก ${f2(l.algoliaCold, 0)})`, ``); }
   if (R.genres) { const g = R.genres; L.push(`## ประเภทที่ความเห็นต่างกันมากที่สุด (วัตถุประสงค์ข้อ 1)`, `- ช่องว่างคะแนนเฉลี่ยสูงสุด: **${g.topByGap}** (${f2(g.topByGapValue)} คะแนน)`, `- |Δ S.D.| สูงสุด: **${g.topBySD}** (${f2(g.topBySDValue)})`, ``, `| ประเภท | Critics SD | Audience SD | |Δ| | ช่องว่างเฉลี่ย | ตัวอย่าง |`, `|---|---:|---:|---:|---:|---:|`);
     g.rows.forEach(r => L.push(`| ${r.genre} | ${f2(r.criticsSD)} | ${f2(r.audienceSD)} | ${f2(r.sdDiff)} | ${f2(r.meanAbsGap)} | ${r.sample} |`)); L.push(``); }
@@ -412,11 +539,11 @@ function mdSummary() {
 function refreshSummary() { $("#summary").value = mdSummary(); }
 function download(name, text, type) { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
 
-const RUNNERS = { lat: runLatency, cmp: runCompleteness, gen: runGenres, rec: runRecompute, ver: runVerdicts, fil: runFilters, alg: runAlgolia, ai: runAI };
+const RUNNERS = { eda: runEDA, lat: runLatency, cmp: runCompleteness, gen: runGenres, rec: runRecompute, ver: runVerdicts, fil: runFilters, alg: runAlgolia, ai: runAI };
 Object.entries(RUNNERS).forEach(([k, fn]) => $(`#btn-${k}`).addEventListener("click", async () => { R.ranAt = new Date().toISOString(); await fn(); refreshSummary(); }));
 $("#btn-all").addEventListener("click", async () => {
   $("#btn-all").disabled = true; R.ranAt = new Date().toISOString();
-  for (const k of ["lat", "cmp", "gen", "rec", "ver", "fil", "alg"]) { await RUNNERS[k](); refreshSummary(); }
+  for (const k of ["lat", "cmp", "gen", "rec", "ver", "eda", "fil", "alg"]) { await RUNNERS[k](); refreshSummary(); }
   $("#btn-all").disabled = false;
 });
 $("#btn-copy").addEventListener("click", async () => { refreshSummary(); try { await navigator.clipboard.writeText($("#summary").value); $("#btn-copy").innerText = "คัดลอกแล้ว ✓"; } catch (e) { $("#summary").select(); } setTimeout(() => $("#btn-copy").innerText = "คัดลอก Markdown", 1800); });
