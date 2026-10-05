@@ -130,7 +130,6 @@
         .home-row .section-header { margin-bottom: 12px; font-size: 19px; }
         .row-link { font-size: 13px; color: #8892b0; text-decoration: none; cursor: pointer; font-weight: 500; white-space: nowrap; }
         .row-link:hover { color: #ff6600; }
-        .row-note { font-size: 12px; color: #8892b0; font-weight: 400; margin-left: 10px; }
         .like-btn { margin-top: 12px; background: transparent; border: 1px solid #ff6600; color: #ff6600; border-radius: 999px; padding: 6px 16px; font-size: 14px; cursor: pointer; }
         .like-btn[aria-pressed="true"] { background: #ff6600; color: #0a192f; }
         .movie-row { display: flex; gap: 10px; overflow-x: auto; padding: 6px 0 10px 0; scroll-behavior: smooth; scrollbar-width: none; }
@@ -1980,7 +1979,7 @@
         function forYouRow(t = readTaste()) {
             const genres = topGenres(t);
             if (!genres.length) return null;
-            return { key: "foryou", forYou: true, genres, title: `For you · ${genres.map(genreLabelTH).join(", ")}`,
+            return { key: "foryou", forYou: true, genres, title: "For you",
                      f: { genre: genres[0], popular: "Audience_Average" } };
         }
 
@@ -2200,11 +2199,10 @@
             const link = r.forYou
                 ? `<span><a class="row-link" onclick="openRow('${r.key}')">ดูทั้งหมด ›</a> <a class="row-link" onclick="clearTaste()">ล้างประวัติ</a></span>`
                 : `<a class="row-link" onclick="openRow('${r.key}')">ดูทั้งหมด ›</a>`;
-            const note = r.forYou ? `<span class="row-note">จากเรื่องที่คุณเปิดดูและกดชอบในเครื่องนี้</span>` : "";
             return `
                 <section class="home-row" data-row="${r.key}"${r.forYou ? ` data-genres="${escapeHtml(r.genres.join("|"))}"` : ""}>
                     <div class="section-header">
-                        <span>${escapeHtml(r.title)}${note}</span>
+                        <span>${escapeHtml(r.title)}</span>
                         ${link}
                     </div>
                     <div class="row-wrap">

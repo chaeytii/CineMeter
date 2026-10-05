@@ -6,7 +6,7 @@ import { app, useDb, makeMovies, F } from "../helpers/setup.mjs";
 const mv = (id, genres, extra = {}) => ({ id, Genres: genres, Poster: `https://img/${id}.jpg`, ...extra });
 const fresh = () => localStorage.clear();
 
-test("[BL-PR-01] ยังไม่เคยเปิดหนัง → ไม่มีแถว For you; เปิด Horror 2 เรื่อง → For you · สยองขวัญ", () => {
+test("[BL-PR-01] ยังไม่เคยเปิดหนัง → ไม่มีแถว For you; เปิด Horror 2 เรื่อง → แถว For you (ชื่อแถวไม่ต่อท้ายประเภท) ดึงสยองขวัญ", () => {
   fresh();
   assert.equal(app.forYouRow(), null);
   app.recordTaste(mv("tt1", ["สยองขวัญ"]));
@@ -16,7 +16,7 @@ test("[BL-PR-01] ยังไม่เคยเปิดหนัง → ไม�
   assert.deepEqual(row.genres, ["สยองขวัญ"]);
   assert.equal(row.f.genre, "สยองขวัญ");
   assert.equal(row.f.popular, "Audience_Average");
-  assert.match(row.title, /^For you · /);
+  assert.equal(row.title, "For you");
 });
 
 test("[BL-PR-02] กดชอบ = +3 และกดซ้ำ = ยกเลิก; เรียงประเภทจากแต้มมากไปน้อย เอา 2 อันดับแรก", () => {
