@@ -46,6 +46,8 @@ const NAMES = [
   "fetchMovies", "renderSkeleton", "renderTop10", "updateHomeRows", "buildHomeRows", "renderGrid", "buildCard", "updateGridHeader",
   // hero
   "readStore", "writeStore", "isHeroCandidate", "buildHeroPool", "shuffled", "pickHero",
+  // personalized (PERS-01, v7_9 เท่านั้น)
+  "?TASTE_KEY", "?TASTE", "?readTaste", "?addGenreScore", "?recordTaste", "?toggleLike", "?topGenres", "?mixForYou", "?forYouRow",
   // recommend side
   "getGenreSD", "decideTrustSide", "isDetailOpen",
   // similarity ("If you like…")

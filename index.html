@@ -130,6 +130,9 @@
         .home-row .section-header { margin-bottom: 12px; font-size: 19px; }
         .row-link { font-size: 13px; color: #8892b0; text-decoration: none; cursor: pointer; font-weight: 500; white-space: nowrap; }
         .row-link:hover { color: #ff6600; }
+        .row-note { font-size: 12px; color: #8892b0; font-weight: 400; margin-left: 10px; }
+        .like-btn { margin-top: 12px; background: transparent; border: 1px solid #ff6600; color: #ff6600; border-radius: 999px; padding: 6px 16px; font-size: 14px; cursor: pointer; }
+        .like-btn[aria-pressed="true"] { background: #ff6600; color: #0a192f; }
         .movie-row { display: flex; gap: 10px; overflow-x: auto; padding: 6px 0 10px 0; scroll-behavior: smooth; scrollbar-width: none; }
         .movie-row::-webkit-scrollbar { display: none; }
         .movie-row .movie-card { flex: 0 0 165px; height: 248px; }
@@ -498,6 +501,7 @@
                         <span class="votes" id="d-votes"></span>
                         <span class="genre-chips" id="d-genre"></span>
                     </div>
+                    <button class="like-btn" id="d-like" type="button" aria-pressed="false" onclick="toggleLikeCurrent()">♡ ชอบเรื่องนี้</button>
                     <button class="primary-btn ratings-btn" id="d-view-ratings" type="button">View all ratings ↗</button>
                 </div>
             </div>
@@ -1892,6 +1896,103 @@
             try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { }
         }
 
+        /* -------------------------------------------------------------
+         * PERSONALIZED แบบไม่ต้องล็อกอิน (PERS-01)
+         * เบราว์เซอร์เครื่องนั้นจำเอง (localStorage) ว่าผู้ใช้ชอบหนังประเภทไหน ไม่มีอะไรส่งขึ้นเซิร์ฟเวอร์
+         * - เปิดหน้ารายละเอียด 1 ครั้ง = ประเภทของเรื่องนั้นได้ +1, กด ♥ = +3 (กดซ้ำ = ยกเลิก -3)
+         * - ประเภทที่ได้ตั้งแต่ 2 แต้มขึ้นไป 2 อันดับแรก -> แถว "For you" บนหน้าแรก ไม่ซ้ำเรื่องที่เปิดดูแล้ว
+         * - เปลี่ยนเครื่องหรือล้างข้อมูลเบราว์เซอร์ = เริ่มนับใหม่ / กด "ล้างประวัติ" ได้ทุกเมื่อ
+         * ----------------------------------------------------------- */
+        const TASTE_KEY = "cinemeter:taste:v1";
+        const TASTE = { view: 1, like: 3, minScore: 2, topN: 2, seenMax: 200 };
+
+        function readTaste() {
+            const t = readStore(TASTE_KEY, null);
+            const ok = t && typeof t === "object" && t.genres && typeof t.genres === "object" && !Array.isArray(t.genres);
+            return {
+                genres: ok ? t.genres : {},
+                seen: ok && Array.isArray(t.seen) ? t.seen : [],
+                liked: ok && Array.isArray(t.liked) ? t.liked : []
+            };
+        }
+
+        function addGenreScore(t, movie, delta) {
+            [...new Set(movieGenres(movie).map(canonicalGenre))].forEach(g => {
+                t.genres[g] = Math.max(0, (Number(t.genres[g]) || 0) + delta);
+                if (!t.genres[g]) delete t.genres[g];
+            });
+        }
+
+        function recordTaste(movie) {
+            const t = readTaste();
+            if (!movie || !movie.id) return t;
+            addGenreScore(t, movie, TASTE.view);
+            t.seen = [movie.id, ...t.seen.filter(id => id !== movie.id)].slice(0, TASTE.seenMax);
+            writeStore(TASTE_KEY, t);
+            return t;
+        }
+
+        function toggleLike(movie) {
+            const t = readTaste();
+            if (!movie || !movie.id) return t;
+            const liked = t.liked.includes(movie.id);
+            addGenreScore(t, movie, liked ? -TASTE.like : TASTE.like);
+            t.liked = liked ? t.liked.filter(id => id !== movie.id) : [movie.id, ...t.liked];
+            writeStore(TASTE_KEY, t);
+            return t;
+        }
+
+        // ประเภทที่คะแนนถึงเกณฑ์ เรียงจากมากไปน้อย (เท่ากันเรียงตามชื่อ ให้ผลเหมือนเดิมทุกครั้ง)
+        function topGenres(t, n = TASTE.topN) {
+            return Object.entries(t.genres)
+                .filter(([g, s]) => g && Number(s) >= TASTE.minScore)
+                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+                .slice(0, n).map(([g]) => g);
+        }
+
+        // สลับหนังจากแต่ละประเภททีละเรื่อง ตัดเรื่องซ้ำ เรื่องที่เคยเปิด และเรื่องไม่มีโปสเตอร์
+        function mixForYou(lists, seen, size) {
+            const skip = new Set(seen), out = [];
+            const longest = Math.max(0, ...lists.map(l => l.length));
+            for (let i = 0; i < longest && out.length < size; i++) {
+                for (const list of lists) {
+                    const m = list[i];
+                    if (!m || !m.Poster || skip.has(m.id)) continue;
+                    skip.add(m.id);
+                    out.push(m);
+                    if (out.length >= size) break;
+                }
+            }
+            return out;
+        }
+
+        function forYouRow(t = readTaste()) {
+            const genres = topGenres(t);
+            if (!genres.length) return null;
+            return { key: "foryou", forYou: true, genres, title: `For you · ${genres.map(genreLabelTH).join(", ")}`,
+                     f: { genre: genres[0], popular: "Audience_Average" } };
+        }
+
+        function syncLikeButton(movie) {
+            const btn = document.getElementById("d-like");
+            if (!btn || !movie) return;
+            const on = readTaste().liked.includes(movie.id);
+            btn.setAttribute("aria-pressed", on ? "true" : "false");
+            btn.textContent = on ? "♥ ชอบแล้ว" : "♡ ชอบเรื่องนี้";
+        }
+
+        window.toggleLikeCurrent = function () {
+            const movie = currentDetail && currentDetail.movie;
+            if (!movie) return;
+            toggleLike(movie);
+            syncLikeButton(movie);
+        };
+
+        window.clearTaste = function () {
+            try { localStorage.removeItem(TASTE_KEY); } catch (e) { }
+            ensureForYouRow();
+        };
+
         let lastHeroId = (() => {
             try { return localStorage.getItem(HERO_STORAGE_KEY); } catch (e) { return null; }
         })();
@@ -2078,8 +2179,48 @@
             return { genre: "", year: "", media: "", popular: "popular", search: "", ...row.f };
         }
 
+        // แถวหน้าแรกตอนนี้ = For you (ถ้ามี) + แถวหมวดตายตัว
+        function homeRowsNow() {
+            const fy = forYouRow();
+            return fy ? [fy, ...HOME_ROWS] : HOME_ROWS;
+        }
+
+        function homeRowHtml(r) {
+            const link = r.forYou
+                ? `<span><a class="row-link" onclick="openRow('${r.key}')">ดูทั้งหมด ›</a> <a class="row-link" onclick="clearTaste()">ล้างประวัติ</a></span>`
+                : `<a class="row-link" onclick="openRow('${r.key}')">ดูทั้งหมด ›</a>`;
+            const note = r.forYou ? `<span class="row-note">จากเรื่องที่คุณเปิดดูและกดชอบในเครื่องนี้</span>` : "";
+            return `
+                <section class="home-row" data-row="${r.key}"${r.forYou ? ` data-genres="${escapeHtml(r.genres.join("|"))}"` : ""}>
+                    <div class="section-header">
+                        <span>${escapeHtml(r.title)}${note}</span>
+                        ${link}
+                    </div>
+                    <div class="row-wrap">
+                        <button class="row-arrow left" type="button" aria-label="เลื่อนซ้าย" onclick="scrollRow('row-${r.key}', -1)">‹</button>
+                        <div class="movie-row" id="row-${r.key}"></div>
+                        <button class="row-arrow right" type="button" aria-label="เลื่อนขวา" onclick="scrollRow('row-${r.key}', 1)">›</button>
+                    </div>
+                </section>`;
+        }
+
+        // เพิ่ม/เปลี่ยน/ลบแถว For you ให้ตรงกับประวัติล่าสุด (เรียกตอนกลับหน้าแรก)
+        function ensureForYouRow() {
+            const wrap = document.getElementById("homeRows");
+            if (!wrap || !wrap.childElementCount) return;
+            const fy = forYouRow();
+            const cur = wrap.querySelector('.home-row[data-row="foryou"]');
+            const want = fy ? fy.genres.join("|") : "";
+            if (cur && cur.dataset.genres === want) return;
+            if (cur) cur.remove();
+            rowState.delete("foryou");
+            if (!fy) return;
+            wrap.insertAdjacentHTML("afterbegin", homeRowHtml(fy));
+            loadHomeRow("foryou");
+        }
+
         window.openRow = function (key) {
-            const row = HOME_ROWS.find(r => r.key === key);
+            const row = homeRowsNow().find(r => r.key === key);
             if (!row) return;
             activeFilters.genre = row.f.genre || "";
             activeFilters.year = "";
@@ -2095,18 +2236,7 @@
         function buildHomeRows() {
             const wrap = document.getElementById("homeRows");
             if (wrap.childElementCount) return;
-            wrap.innerHTML = HOME_ROWS.map(r => `
-                <section class="home-row" data-row="${r.key}">
-                    <div class="section-header">
-                        <span>${escapeHtml(r.title)}</span>
-                        <a class="row-link" onclick="openRow('${r.key}')">ดูทั้งหมด ›</a>
-                    </div>
-                    <div class="row-wrap">
-                        <button class="row-arrow left" type="button" aria-label="เลื่อนซ้าย" onclick="scrollRow('row-${r.key}', -1)">‹</button>
-                        <div class="movie-row" id="row-${r.key}"></div>
-                        <button class="row-arrow right" type="button" aria-label="เลื่อนขวา" onclick="scrollRow('row-${r.key}', 1)">›</button>
-                    </div>
-                </section>`).join("");
+            wrap.innerHTML = homeRowsNow().map(homeRowHtml).join("");
 
             // โหลดเมื่อเลื่อนมาใกล้ ๆ
             const io = new IntersectionObserver(entries => {
@@ -2122,13 +2252,22 @@
         async function loadHomeRow(key) {
             if (rowState.get(key)) return;
             rowState.set(key, "loading");
-            const row = HOME_ROWS.find(r => r.key === key);
+            const row = homeRowsNow().find(r => r.key === key);
             const box = document.getElementById("row-" + key);
+            if (!row || !box) { rowState.set(key, null); return; }
             box.innerHTML = Array.from({ length: 8 }, () => `<div class="movie-card skeleton"></div>`).join("");
             try {
                 const f = rowFilters(row);
-                const res = f.popular === "random" ? await loadDiscovery(null, f) : await loadRanked(f.popular, null, f);
-                const movies = res.movies.filter(m => m.Poster).slice(0, ROW_SIZE);
+                let movies;
+                if (row.forYou) {
+                    // ดึงหนังที่คนดูชอบในแต่ละประเภทที่ผู้ใช้ชอบ แล้วสลับกันทีละเรื่อง
+                    const lists = [];
+                    for (const g of row.genres) lists.push((await loadRanked(f.popular, null, { ...f, genre: g })).movies);
+                    movies = mixForYou(lists, readTaste().seen, ROW_SIZE);
+                } else {
+                    const res = f.popular === "random" ? await loadDiscovery(null, f) : await loadRanked(f.popular, null, f);
+                    movies = res.movies.filter(m => m.Poster).slice(0, ROW_SIZE);
+                }
                 box.innerHTML = "";
                 movies.forEach(m => box.appendChild(buildCard(m, "", { minimal: true })));
                 if (!movies.length) document.querySelector(`.home-row[data-row="${key}"]`).hidden = true;
@@ -2422,6 +2561,8 @@
             // สลับไปหน้า detail ทันที ไม่ต้องรอ GENRE_ANALYSIS
             lastOpenedMovie = movie;
             currentDetail = { movie, genreSD: null, verdict: null };
+            recordTaste(movie);
+            syncLikeButton(movie);
             document.getElementById("d-recommend").innerText = "…";
             document.getElementById("d-recommend-note").innerText = "";
             document.getElementById("home-view").style.display = "none";
@@ -2465,6 +2606,7 @@
             document.getElementById("home-view").style.display = "block";
             currentDetail = null;
             updateChatContext();
+            ensureForYouRow();
             jumpTo(homeScrollY);
             scheduleHero();
             header.classList.toggle("header-solid", homeScrollY > 60);

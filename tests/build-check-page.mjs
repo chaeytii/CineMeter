@@ -31,6 +31,7 @@ const SECTIONS = [
   ["gen", "3. ประเภทหนังที่ความเห็นต่างกันมากที่สุด", "อ่าน GENRE_ANALYSIS ทั้งหมด + สุ่มหนังรายประเภทมาคำนวณช่องว่างคะแนนนักวิจารณ์ vs คนดู (ตอบวัตถุประสงค์ข้อ 1)", "~ประเภท × N reads"],
   ["rec", "4. คำนวณซ้ำเพื่อตรวจย้อนกลับ", "สุ่มหนังจากทั้งฐาน แล้วคำนวณคะแนนเฉลี่ยและ S.D. ใหม่จากคะแนนดิบ RT / Metacritic / IMDb / TMDb เทียบกับค่าที่เก็บไว้", "~N reads"],
   ["ver", "5. Recommend side บนข้อมูลจริง", "รันกติกา Recommend side (โค้ดเดียวกับแอป) กับกลุ่มตัวอย่าง: สัดส่วนคำตัดสิน, กรณีเส้นขอบ, การใช้ค่าระดับประเภทแทน", "ใช้ตัวอย่างเดิม"],
+  ["eda", "EDA — สำรวจข้อมูลก่อนวิเคราะห์", "การกระจายคะแนนสองฝั่ง, ช่องห่างคนดู − นักวิจารณ์, ช่องห่างแยกตามประเภท, ข้อมูลที่ขาด, ช่องห่างตามจำนวนโหวต — ดาวน์โหลดกราฟเป็น PNG และข้อมูลเป็น CSV ได้", "ใช้ตัวอย่างเดิม"],
   ["fil", "6. ฟิลเตอร์และ index", "ยิงฟิลเตอร์หลายเงื่อนไขกับฐานจริง ตรวจว่าทุกเรื่องผ่านครบ, ตรวจว่ามี composite index หรือยัง, ตรวจหน้าแรกของการเรียงตามคะแนน", "~700 reads"],
   ["alg", "7. การค้นหา Algolia", "9 กรณี: ชื่อเต็ม, พิมพ์บางส่วน, พิมพ์ผิด, คำกลางชื่อ, ภาษาไทย, วรรณยุกต์เกิน, จัดอันดับตามโหวต", "9 searches"],
   ["ai", "8. AI guardrails (Gemini)", "5 คำถามทดสอบกติกากันแต่งข้อมูลของแชทบอท — ใช้โควตา Gemini 5 ครั้ง จึงไม่รวมในปุ่มรันทั้งหมด", "5 Gemini calls"],
@@ -52,6 +53,7 @@ label{color:var(--muted);font-size:13px}input[type=number]{width:84px;background
 button{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer}
 button:hover{border-color:var(--accent)}button.primary{background:var(--accent);border-color:var(--accent);color:#fff}button:disabled{opacity:.55;cursor:wait}
 button.running::after{content:" …"}
+.fig{margin:14px 0 6px;padding:12px;border:1px solid var(--line);border-radius:12px}.fig figcaption{font-weight:600;margin-bottom:8px}.chart{width:100%;height:auto;display:block}.chart .ax{font-size:11px;fill:var(--muted)}.chart .lb,.chart .vl{font-size:12px;fill:var(--text)}.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:6px}.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}button.mini{font-size:12px;padding:4px 10px}
 section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 18px 14px;margin:0 0 16px}
 .sh{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}.sh h2{margin:0;font-size:18px}.sh p{margin:4px 0 0;color:var(--muted);font-size:13.5px}
 .cost{font-size:12px;color:var(--muted);white-space:nowrap}
