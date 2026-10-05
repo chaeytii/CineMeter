@@ -1,0 +1,379 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "Popularity",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "Audience_Score",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "Critics_Score",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "Audience_Average",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "Audience_Average",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "Year",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Popularity",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "Year",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Audience_Score",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "Year",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Critics_Score",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "Year",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Audience_Average",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "Year",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Audience_Average",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "MediaType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Popularity",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "MediaType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Audience_Score",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "MediaType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Critics_Score",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "MediaType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Audience_Average",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "MediaType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Audience_Average",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "MediaType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Year",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Popularity",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "MediaType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Year",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Audience_Score",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "MediaType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Year",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Critics_Score",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "MediaType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Year",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Audience_Average",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Genres",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "MediaType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Year",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Audience_Average",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Companies",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "Popularity",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

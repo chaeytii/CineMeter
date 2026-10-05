@@ -8,6 +8,7 @@
 #   4) คะแนน RT / Metacritic            — หนังที่ออกฉายไม่เกิน 12 เดือน
 #   5) เติมคะแนนนักวิจารณ์              — หนังเก่าที่ยังไม่มี RT/Metacritic (ใช้งบ OMDb ที่เหลือ)
 #   5b) ข้อมูลเสริมจาก TMDB             — Genres / ชุดภาพยนตร์ (ภาคต่อ) / ค่ายผลิต ของเรื่องเก่าที่ยังไม่มี
+#       แล้วสลับตัวกรองประเภทของหน้าเว็บไปใช้ Genres (META/genres) เมื่อครบทุกเรื่องและมี index แล้ว
 #   6) GENRE_ANALYSIS                   — คำนวณใหม่จากข้อมูลทั้งฐาน
 #   7) คะแนนจัดอันดับ Audience_Score / Critics_Score (ถ่วงจำนวนโหวต) + เอาเรื่องที่โหวต TMDB < 10 ออก
 #   8) Algolia                          — ส่งข้อมูลที่เปลี่ยนเข้าช่องค้นหา (ถ้าตั้ง ALGOLIA_ADMIN_KEY)
@@ -53,6 +54,12 @@ SCORE_MIN_VOTES = 25000       # m ในสูตรคะแนนถ่วง�
 MAX_DETAILS_BACKFILL = int(os.getenv("MAX_DETAILS_BACKFILL") or 20000)
 DRY_RUN_DETAILS = 50          # dry run เรียก TMDB เพื่อเติมข้อมูลไม่เกินเท่านี้
 FRANCHISE_FIELDS = {"CollectionID", "CollectionName", "Companies"}
+# composite index ที่หน้าเว็บต้องใช้เมื่อกรองประเภทด้วย Genres (array-contains) — ต้องตรงกับ firestore.indexes.json
+# ชุดตัวกรองที่หน้าเว็บส่งไปพร้อมประเภท × การเรียง (Popular, Loved by audiences/critics, Random discovery ขึ้น/ลง)
+# ("Most IMDb votes" ใช้ Popularity เพราะ imdbVotes ในฐานเป็นข้อความ)
+GENRE_INDEX_FILTERS = [(), ("Year",), ("MediaType",), ("MediaType", "Year")]
+GENRE_INDEX_ORDERS = [("Popularity", "DESCENDING"), ("Audience_Score", "DESCENDING"), ("Critics_Score", "DESCENDING"),
+                      ("Audience_Average", "ASCENDING"), ("Audience_Average", "DESCENDING")]
 MAX_COMPANIES = 3             # เก็บค่ายผลิต 3 อันดับแรกตามที่ TMDB เรียงมา
 WORKERS = 8
 
@@ -182,6 +189,28 @@ class FirestoreStore:
     def read_genres(self):
         return {d.id: d.to_dict() or {} for d in self.db.collection("GENRE_ANALYSIS").stream()}
 
+    def genres_index_ready(self):
+        """ลอง query แบบที่หน้าเว็บใช้หลังสลับไปกรองด้วย Genres ทุกชุด (อ่านชุดละ 1 เรื่อง)
+        ยังไม่มี index หรือยังสร้างไม่เสร็จ Firestore จะตอบ FailedPrecondition — ผิดพลาดแบบอื่นก็ถือว่ายังไม่พร้อม
+        (ขั้นนี้อยู่ก่อนเขียนฐานข้อมูล ห้ามทำให้ทั้งรอบล้ม)"""
+        try:
+            from google.cloud.firestore_v1.base_query import FieldFilter
+            where = lambda q, f, op, v: q.where(filter=FieldFilter(f, op, v))
+        except ImportError:                                   # google-cloud-firestore รุ่นเก่า
+            where = lambda q, f, op, v: q.where(f, op, v)
+        sample = {"Year": "2024", "MediaType": "ภาพยนตร์"}
+        try:
+            for eq in GENRE_INDEX_FILTERS:
+                for field, direction in GENRE_INDEX_ORDERS:
+                    q = where(self.db.collection("MOVIES"), "Genres", "array_contains", "หนังชีวิต")
+                    for f in eq:
+                        q = where(q, f, "==", sample[f])
+                    list(q.order_by(field, direction=direction).limit(1).stream())
+            return True
+        except Exception as e:                               # FailedPrecondition = ยังไม่มี index / กำลังสร้าง
+            print(f"index ของ Genres ยังไม่พร้อม: {type(e).__name__}: {str(e)[:160]}")
+            return False
+
     def delete(self, collection, doc_ids):
         col = self.db.collection(collection)
         batch, n = self.db.batch(), 0
@@ -256,6 +285,8 @@ def load_imdb(cache_dir, today):
 def tmdb_get(path, **params):
     params["api_key"] = fm.TMDB_API_KEY
     r = requests.get(f"https://api.themoviedb.org/3/{path}", params=params, timeout=15)
+    if r.status_code == 404:
+        return {"_not_found": True}       # TMDB ไม่มีเรื่องนี้แล้ว (ต่างจากผิดพลาดชั่วคราวที่ควรลองใหม่รอบหน้า)
     return r.json() if r.status_code == 200 else {}
 
 
@@ -290,6 +321,8 @@ def tmdb_details(tmdb_id, kind):
     genres = ทุกประเภทของเรื่อง, collection = ชุดภาพยนตร์ (ภาคต่อ เช่น The Avengers Collection; ซีรีส์ไม่มี),
     companies = รหัสค่ายผลิต 3 อันดับแรก (เช่น Marvel Studios = 420)"""
     data = tmdb_get(f"{kind}/{tmdb_id}", language="th-TH")
+    if data.get("_not_found"):
+        return {"genres": [], "collection_id": 0, "collection_name": "", "companies": [], "not_found": True}
     if not data or "genres" not in data:
         return None
     coll = data.get("belongs_to_collection") if isinstance(data.get("belongs_to_collection"), dict) else {}
@@ -299,6 +332,12 @@ def tmdb_details(tmdb_id, kind):
     return {"genres": [g["name"] for g in data.get("genres") or [] if isinstance(g, dict) and g.get("name")],
             "collection_id": cid, "collection_name": (coll.get("name") or "") if cid else "",
             "companies": companies[:MAX_COMPANIES]}
+
+
+def first_genre(m):
+    """ประเภทแรกที่เก็บไว้แล้ว (Genre_for_cal) ในรูปค่าเมนู — ใช้เมื่อ TMDB ให้รายชื่อประเภทไม่ได้"""
+    raw = str(m.get("Genre_for_cal") or "").strip()
+    return [] if not raw or raw.upper() == "N/A" or raw == "Unknown" else menu_genres([raw])
 
 
 def franchise_fields(details):
@@ -478,7 +517,7 @@ def run(store, imdb_loader, today, omdb_budget, dry_run=False, log=print, algoli
              "backlog_total": 0, "backlog_left": 0, "new_omdb_failed": 0, "refresh_candidates": 0,
              "backfill_candidates": 0, "backfilled": 0, "backfill_left": 0, "docs_written": 0,
              "algolia_mode": "-", "algolia_records": 0, "new_low_tmdb": 0, "removed_low_tmdb": 0, "scores_written": 0,
-             "genres_mode": "-", "genres_filled": 0, "franchise_filled": 0}
+             "genres_mode": "-", "genres_filled": 0, "genres_missing": 0, "franchise_filled": 0}
 
     movies = store.read_movies(READ_FIELDS)
     stats["existing"] = len(movies)
@@ -606,8 +645,7 @@ def run(store, imdb_loader, today, omdb_budget, dry_run=False, log=print, algoli
                     doc["omdbCheckedAt"] = today.isoformat()
                     det = item.get("_details")
                     if det:
-                        if det["genres"]:
-                            doc["Genres"] = menu_genres(det["genres"])
+                        doc["Genres"] = menu_genres(det["genres"]) if det["genres"] else first_genre(doc)
                         doc.update(franchise_fields(det))
                     new_docs[item["imdbID"]] = doc
         stats["backlog_left"] = len(backlog) - pos + stats["new_omdb_failed"]
@@ -674,28 +712,30 @@ def run(store, imdb_loader, today, omdb_budget, dry_run=False, log=print, algoli
         if changed:
             put(doc_id, changed)
 
-    # เติมข้อมูลจาก TMDB ให้เรื่องเก่า (คำขอเดียวต่อเรื่อง):
-    #   Genres — เฉพาะเมื่อหน้าเว็บใช้ Genres กรองแล้ว (META/genres.complete)
-    #   CollectionID / CollectionName / Companies — ใช้ทำแถว "ภาคอื่นในชุดนี้" และ If you like… บนหน้าเว็บ
-    genres_meta = store.read_doc("META", "genres") or {}
-    fill_genres = bool(genres_meta.get("complete"))
-    stats["genres_mode"] = ("ใช้ Genres (META/genres.complete)" if fill_genres
-                            else "ใช้ Genre_for_cal (META/genres ยังไม่ complete)")
-    need_genres = lambda m: fill_genres and not m.get("Genres")
-    need = sorted((i for i, m in movies.items() if i not in new_docs and isinstance(m.get("tmdbID"), int)
-                   and not isinstance(m.get("tmdbID"), bool) and (need_genres(m) or "CollectionID" not in m)),
+    # เติมข้อมูลจาก TMDB ให้เรื่องเก่า (คำขอเดียวต่อเรื่อง เรียงจากโหวตมากไปน้อย):
+    #   Genres — ทุกประเภทของเรื่อง (ชุดแรกเก็บแค่ประเภทแรกใน Genre_for_cal) หน้าเว็บแสดงทันทีที่มี
+    #            ส่วนตัวกรองสลับมาใช้ Genres เมื่อครบทุกเรื่องและมี index แล้ว (META/genres ด้านล่าง)
+    #   CollectionID / CollectionName / Companies — ใช้ทำแถว "ภาคอื่นในชุดนี้" และ If you like…
+    # ไม่มีรหัส TMDB / TMDB ไม่มีเรื่องนี้แล้ว / TMDB ไม่มีประเภท → ใช้ประเภทแรกที่มีอยู่ จะได้ไม่มีเรื่องค้างตลอดไป
+    valid_tid = lambda m: isinstance(m.get("tmdbID"), int) and not isinstance(m.get("tmdbID"), bool)
+    for doc_id, m in movies.items():
+        if doc_id not in new_docs and "Genres" not in m and not valid_tid(m):
+            put(doc_id, {"Genres": first_genre(m)})
+            stats["genres_filled"] += 1
+    need = sorted((i for i, m in movies.items() if i not in new_docs and valid_tid(m)
+                   and ("Genres" not in m or "CollectionID" not in m)),
                   key=lambda i: -parse_votes(movies[i].get("imdbVotes")))
     need = need[:DRY_RUN_DETAILS if dry_run else MAX_DETAILS_BACKFILL]
     kinds = {i: ("tv" if movies[i].get("MediaType") == "ซีรีส์" else "movie") for i in need}
     with concurrent.futures.ThreadPoolExecutor(max_workers=OMDB_WORKERS) as ex:
         for doc_id, det in zip(need, ex.map(lambda i: tmdb_details(movies[i]["tmdbID"], kinds[i]), need)):
             if not det:
-                continue
-            fields = {}
-            if need_genres(movies[doc_id]) and det["genres"]:
-                fields["Genres"] = menu_genres(det["genres"])
+                continue                  # TMDB ผิดพลาดชั่วคราว — ลองใหม่รอบหน้า
+            m, fields = movies[doc_id], {}
+            if "Genres" not in m:
+                fields["Genres"] = menu_genres(det["genres"]) if det["genres"] else first_genre(m)
                 stats["genres_filled"] += 1
-            if "CollectionID" not in movies[doc_id]:
+            if "CollectionID" not in m:
                 fields.update(franchise_fields(det))
                 stats["franchise_filled"] += 1
             if fields:
@@ -712,6 +752,24 @@ def run(store, imdb_loader, today, omdb_budget, dry_run=False, log=print, algoli
     meta_update = {} if meta.get("priorAudience") == prior_aud and meta.get("priorCritics") == prior_crit else {
         "ranking": {"priorAudience": prior_aud, "priorCritics": prior_crit, "minVotes": SCORE_MIN_VOTES,
                     "createdAt": today.isoformat()}}
+    # สลับตัวกรองประเภทบนหน้าเว็บไปใช้ Genres (META/genres.complete) เมื่อทุกเรื่องมี Genres และ index พร้อมแล้ว
+    # ถ้าสลับก่อน index พร้อม ตัวกรองประเภทจะต้องใช้โหมดสำรองที่เรียงผลได้ไม่ครบ จึงตรวจ index ก่อนทุกครั้ง
+    genres_meta = store.read_doc("META", "genres") or {}
+    stats["genres_missing"] = sum(1 for m in movies.values() if "Genres" not in m)
+    if genres_meta.get("complete"):
+        stats["genres_mode"] = "ใช้ Genres (META/genres.complete)"
+    elif stats["genres_missing"]:
+        stats["genres_mode"] = "ใช้ Genre_for_cal — ยังเติม Genres ไม่ครบ"
+    elif dry_run:
+        stats["genres_mode"] = "ใช้ Genre_for_cal — Genres ครบแล้ว (dry run ไม่สลับ)"
+    elif store.genres_index_ready():
+        meta_update["genres"] = {"complete": True, "completedAt": today.isoformat()}
+        stats["genres_mode"] = "สลับเป็นใช้ Genres รอบนี้ (ครบทุกเรื่องและ index พร้อม)"
+    else:
+        stats["genres_mode"] = "ใช้ Genre_for_cal — Genres ครบแล้ว รอ index (firebase deploy --only firestore:indexes)"
+    if stats["genres_mode"].startswith("ใช้ Genre_for_cal"):
+        log(f"ประเภทหนัง: {stats['genres_mode']} (ยังขาด {stats['genres_missing']:,} เรื่อง)")
+
     for doc_id, m in movies.items():
         votes = strict_int(m.get("imdbVotes")) or 0
         sc = {"Audience_Score": weighted(m.get("Audience_Average"), votes, prior_aud),
@@ -775,7 +833,7 @@ SUMMARY_LABELS = [
     ("backfill_candidates", "หนังเก่าที่ขาดคะแนนนักวิจารณ์"), ("backfilled", "เติมคะแนนนักวิจารณ์ได้"),
     ("backfill_left", "หนังเก่าที่ยังรอตรวจ"), ("repaired", "ซ่อมค่า 0 → N/A"),
     ("scores_written", "อัปเดตคะแนนจัดอันดับ (ถ่วงโหวต)"),
-    ("genres_mode", "ประเภทหนังที่หน้าเว็บใช้กรอง"), ("genres_filled", "เติม Genres ให้เรื่องเก่า"),
+    ("genres_mode", "ประเภทหนังที่หน้าเว็บใช้กรอง"), ("genres_filled", "เติม Genres ให้เรื่องเก่า"), ("genres_missing", "เรื่องที่ยังไม่มี Genres"),
     ("franchise_filled", "เติมชุดภาพยนตร์/ค่ายผลิตให้เรื่องเก่า"),
     ("docs_written", "document ที่เขียน (MOVIES)"), ("genres_written", "document ที่เขียน (GENRE_ANALYSIS)"),
     ("algolia_mode", "Algolia"), ("algolia_records", "record ที่ส่งเข้า Algolia"),

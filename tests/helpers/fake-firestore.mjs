@@ -4,6 +4,8 @@
 //  - type-strict equality ("2020" !== 2020)
 //  - implicit __name__ tie-breaker in the direction of the last orderBy
 //  - optional "no composite index" mode that throws like Firestore does
+//  - optional `indexes` (the "indexes" array of firestore.indexes.json): a query that needs a composite
+//    index must match one of them exactly, otherwise it throws like Firestore does
 const TYPE_RANK = v => v === null ? 0 : typeof v === "boolean" ? 1 : typeof v === "number" ? 2 : typeof v === "string" ? 4 : Array.isArray(v) ? 9 : 10;
 
 export function cmpValues(a, b) {
@@ -37,7 +39,21 @@ function matchWhere(doc, w) {
   }
 }
 
-export function makeFakeDb(rows, { compositeIndex = true, delay = 0, delayFor = null, extraCollections = {} } = {}) {
+// Firestore rule: equality / array-contains fields (any order) followed by the orderBy fields in order and direction
+function indexCovers(indexes, colName, wheres, orders) {
+  const ord = orders.filter(o => o.field !== "__name__");
+  const eq = wheres.filter(w => !ord.some(o => o.field === w.field));
+  return indexes.some(ix => {
+    if (ix.collectionGroup !== colName || ix.fields.length !== eq.length + ord.length) return false;
+    const head = ix.fields.slice(0, eq.length), tail = ix.fields.slice(eq.length);
+    const headOk = eq.every(w => head.some(f => f.fieldPath === w.field &&
+      (w.op.startsWith("array-contains") ? f.arrayConfig === "CONTAINS" : !!f.order)));
+    const tailOk = ord.every((o, i) => tail[i].fieldPath === o.field && tail[i].order === (o.desc ? "DESCENDING" : "ASCENDING"));
+    return headOk && tailOk;
+  });
+}
+
+export function makeFakeDb(rows, { compositeIndex = true, indexes = null, delay = 0, delayFor = null, extraCollections = {} } = {}) {
   const store = { MOVIES: rows.map(r => ({ id: r.id, data: { ...r } })) };
   for (const [name, list] of Object.entries(extraCollections)) store[name] = list.map(r => ({ id: r.id, data: { ...r } }));
   Object.values(store).forEach(list => list.forEach(d => delete d.data.id));
@@ -69,7 +85,8 @@ export function makeFakeDb(rows, { compositeIndex = true, delay = 0, delayFor = 
     // composite-index rule: filters on field(s) other than the (non-__name__) orderBy field need a composite index
     const orderFields = orders.map(o => o.field).filter(f => f !== "__name__");
     const whereFields = [...new Set(wheres.map(w => w.field))];
-    if (!compositeIndex && orderFields.length && whereFields.some(f => !orderFields.includes(f))) {
+    const needsComposite = orderFields.length && whereFields.some(f => !orderFields.includes(f));
+    if (needsComposite && (indexes ? !indexCovers(indexes, colName, wheres, orders) : !compositeIndex)) {
       stats.indexErrors++;
       throw new Error("FAILED_PRECONDITION: The query requires an index. You can create it here: https://console.firebase.google.com/project/movie-858f6/firestore/indexes?create_composite=fake");
     }
