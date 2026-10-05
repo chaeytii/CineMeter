@@ -261,7 +261,7 @@ PATCHES = [
      "        function forYouRow(t = readTaste()) {\n"
      "            const genres = topGenres(t);\n"
      "            if (!genres.length) return null;\n"
-     "            return { key: \"foryou\", forYou: true, genres, title: `For you · ${genres.map(genreLabelTH).join(\", \")}`,\n"
+     "            return { key: \"foryou\", forYou: true, genres, title: \"For you\",\n"
      "                     f: { genre: genres[0], popular: \"Audience_Average\" } };\n"
      "        }\n"
      "\n"

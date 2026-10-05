@@ -1980,7 +1980,7 @@
         function forYouRow(t = readTaste()) {
             const genres = topGenres(t);
             if (!genres.length) return null;
-            return { key: "foryou", forYou: true, genres, title: `For you · ${genres.map(genreLabelTH).join(", ")}`,
+            return { key: "foryou", forYou: true, genres, title: "For you",
                      f: { genre: genres[0], popular: "Audience_Average" } };
         }
 
