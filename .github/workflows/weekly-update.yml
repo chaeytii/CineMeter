@@ -11,6 +11,10 @@ on:
         description: "Dry run — คำนวณอย่างเดียว ไม่เขียนฐานข้อมูล"
         type: boolean
         default: true
+      details_backfill:
+        description: "เติม Genres / ชุดภาพยนตร์ / ค่ายผลิตให้เรื่องเก่าไม่เกินกี่เรื่อง (ครั้งแรกใส่ 80000 = ทั้งฐาน)"
+        type: string
+        default: "20000"
 
 permissions:
   contents: read
@@ -52,6 +56,7 @@ jobs:
           ALGOLIA_ADMIN_KEY: ${{ secrets.ALGOLIA_ADMIN_KEY }}
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          MAX_DETAILS_BACKFILL: ${{ inputs.details_backfill || '20000' }}
         run: python firebase-upload/weekly_update.py
 
       - name: Remove credentials

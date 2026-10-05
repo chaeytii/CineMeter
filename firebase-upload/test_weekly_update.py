@@ -489,6 +489,68 @@ class WeeklyUpdateTest(unittest.TestCase):
             self.assertEqual(got, ["สยองขวัญ"] if complete else None, f"complete={complete}")
             self.assertEqual(stats["genres_filled"], 1 if complete else 0)
 
+    def test_new_titles_get_collection_and_companies(self):
+        d = tmdb_movie(80, "tt8000000")
+        d["belongs_to_collection"] = {"id": 86311, "name": "The Avengers Collection"}
+        d["production_companies"] = [{"id": 420, "name": "Marvel Studios"}, {"id": 2}, {"id": 3}, {"id": 4}]
+        store = FakeStore({})
+        self.run_update(store, ratings_of(tt8000000=("8.0", 9000)), {"tt8000000": 2025},
+                        FakeApis({("movie", 80): d}, {"tt8000000": omdb()}))
+        doc = store.writes["MOVIES"]["tt8000000"]
+        self.assertEqual((doc["CollectionID"], doc["CollectionName"], doc["Companies"]),
+                         (86311, "The Avengers Collection", [420, 2, 3]))
+
+    def test_old_titles_backfill_collection_most_voted_first_within_cap(self):
+        tmdb = {}
+        for tid in (91, 92, 93):
+            tmdb[("movie", tid)] = tmdb_movie(tid, f"tt00000{tid}")
+        tmdb[("movie", 91)]["belongs_to_collection"] = {"id": 10, "name": "Trilogy"}
+        movies = {"tt0000091": existing(votes="500,000", tmdbID=91), "tt0000092": existing(votes="1,000", tmdbID=92),
+                  "tt0000093": existing(votes="80,000", tmdbID=93)}
+        apis = FakeApis(tmdb, {})
+        detail_calls = []
+        real_get = apis.get
+        def counting_get(url, params=None, **kw):
+            if "/movie/" in url:
+                detail_calls.append(url.rsplit("/", 1)[-1])
+            return real_get(url, params=params, **kw)
+        apis.get = counting_get
+        store = FakeStore(movies)
+        ratings = ratings_of(tt0000091=("7.0", 500000), tt0000092=("7.0", 1000), tt0000093=("7.0", 80000))
+        with mock.patch.object(wu, "MAX_DETAILS_BACKFILL", 2):
+            stats = self.run_update(store, ratings, {}, apis)
+            self.assertEqual(stats["franchise_filled"], 2)
+            self.assertEqual(store.movies["tt0000091"]["CollectionID"], 10)
+            self.assertEqual(store.movies["tt0000093"]["CollectionID"], 0)       # ตรวจแล้ว ไม่อยู่ชุดไหน
+            self.assertNotIn("CollectionID", store.movies["tt0000092"])          # โหวตน้อยสุด รอรอบหน้า
+            detail_calls.clear()
+            stats = self.run_update(store, ratings, {}, apis)
+        self.assertEqual(stats["franchise_filled"], 1)
+        self.assertEqual(detail_calls, ["92"])                                   # ไม่ถามซ้ำเรื่องที่เติมแล้ว
+        self.assertEqual(store.movies["tt0000092"]["Companies"], [])
+
+    def test_franchise_only_changes_are_not_sent_to_algolia(self):
+        movies = scored({f"tt00002{i:02d}": existing(tmdbID=200 + i) for i in range(5)})
+        tmdb = {("movie", 200 + i): tmdb_movie(200 + i, f"tt00002{i:02d}") for i in range(5)}
+        algolia = FakeAlgolia({k: dict(v, imdbID=k) for k, v in movies.items()})
+        store = FakeStore(movies)
+        store.meta["ranking"] = {"priorAudience": 7.0, "priorCritics": 7.5}
+        ratings = ratings_of(**{k: ("7.0", 10000) for k in movies})
+        stats = self.run_update(store, ratings, {}, FakeApis(tmdb, {}), algolia=algolia, today=dt.date(2026, 10, 12))
+        self.assertEqual(stats["franchise_filled"], 5)
+        self.assertTrue(all("CollectionID" in store.writes["MOVIES"][k] for k in movies))
+        sent = [r for m, p, b in algolia.calls if p.endswith("/batch") for r in b["requests"]]
+        self.assertEqual(sent, [])
+
+    def test_dry_run_details_backfill_is_capped_and_writes_nothing(self):
+        movies = {f"tt0003{i:03d}": existing(tmdbID=300 + i) for i in range(80)}
+        tmdb = {("movie", 300 + i): tmdb_movie(300 + i, f"tt0003{i:03d}") for i in range(80)}
+        store = FakeStore(movies)
+        stats = self.run_update(store, ratings_of(**{k: ("7.0", 10000) for k in movies}), {},
+                                FakeApis(tmdb, {}), dry_run=True)
+        self.assertEqual(stats["franchise_filled"], wu.DRY_RUN_DETAILS)
+        self.assertEqual(store.writes, {})
+
     def test_algolia_full_replace_respects_record_cap(self):
         movies = {"tt0000031": existing(votes="1,000"), "tt0000032": existing(votes="900,000"), "tt0000033": existing(votes="50,000")}
         algolia = FakeAlgolia({"x1": {"imdbID": "tt0000031"}})

@@ -1,108 +1,114 @@
 <?xml version="1.0" encoding="utf-8"?>
 <testsuites>
-	<testcase name="[BL-SD-01] SD สองฝั่งใกล้กัน (ต่าง 0.10) → ความเห็นตรงกัน" time="0.001372" classname="test"/>
-	<testcase name="[BL-SD-02] SD นักวิจารณ์ต่ำกว่าชัดเจน → เชื่อฝั่งนักวิจารณ์" time="0.000292" classname="test"/>
-	<testcase name="[BL-SD-03] SD คนดูต่ำกว่าชัดเจน → เชื่อฝั่งคนดู" time="0.000109" classname="test"/>
-	<testcase name="[BL-SD-04] ขาด SD นักวิจารณ์ → ใช้ Genre_Critics_SD แทนแล้วเทียบ + แจ้ง note" time="0.001784" classname="test"/>
-	<testcase name="[BL-SD-05] ขาด SD คนดู → ใช้ Genre_Audience_SD แทน" time="0.000197" classname="test"/>
-	<testcase name="[BL-SD-06] Overall_SD ≥ 1.50 → ภาพยนตร์เฉพาะกลุ่ม (มีลำดับความสำคัญเหนือการเทียบฝั่ง)" time="0.000122" classname="test"/>
-	<testcase name="[BL-SD-07] Overall_SD ≥ 1.5 เท่าของ S.D. ประเภท → เฉพาะกลุ่ม แม้ต่ำกว่า 1.50" time="0.000129" classname="test"/>
-	<testcase name="[BL-SD-08] Overall_SD 1.49 และไม่มีค่าประเภท → ไม่ถือว่าเฉพาะกลุ่ม" time="0.000127" classname="test"/>
-	<testcase name="[BL-SD-09] ไม่มีข้อมูล SD เลย → ขาดข้อมูลในการตัดสินใจ" time="0.000092" classname="test"/>
-	<testcase name="[BL-SD-10] มีข้อมูลฝั่งเดียวและไม่มีค่าประเภท → ชี้ไปฝั่งที่มีข้อมูล พร้อม note" time="0.000187" classname="test"/>
-	<testcase name="[BL-SD-11] (Midterm TC4) ประเภทที่มีหนังเรื่องเดียว คำนวณ SD ไม่ได้ (null) → ไม่ error และแจ้งขาดข้อมูล" time="0.000320" classname="test"/>
-	<testcase name="[BL-SD-12] SD = 0 ทั้งสองฝั่ง ถือเป็นข้อมูลจริง (ไม่ใช่ขาดข้อมูล) → ตรงกัน" time="0.000099" classname="test"/>
-	<testcase name="[BL-SD-13] แปลงค่าจากฐานข้อมูล: 'N/A', '', null → null ; '0.35' → 0.35 ; 0 → 0" time="0.000190" classname="test"/>
-	<testcase name="[BL-SD-14] ขอบเขตพอดี: ต่างกัน 0.15 (0.30 vs 0.45) ต้องนับว่า 'ตรงกัน' ตามกติกา 'ไม่เกิน 0.15'" time="0.000088" classname="test"/>
-	<testcase name="[BL-SD-15] ขอบเขตพอดีทุกคู่ค่า 2 ตำแหน่ง (0.00–2.00) ที่ต่างกัน 0.15 ต้องได้ 'ตรงกัน' ทุกคู่" time="0.001276" classname="test"/>
-	<testcase name="[BL-SD-16] Property test 20,000 ชุดสุ่ม: ไม่ throw และผลลัพธ์อยู่ในชุดคำตอบที่กำหนดเท่านั้น (5 ข้อความ)" time="0.030889" classname="test"/>
-	<testcase name="[BL-SD-17] (Mortal Kombat 2021) ค่าเฉลี่ยห่าง 1.62 แต่ S.D. ใกล้กัน (0.78 vs 0.66) → สองฝั่งเห็นต่าง ไม่ใช่ 'ตรงกัน'" time="0.000321" classname="test"/>
-	<testcase name="[BL-SD-18] ค่าเฉลี่ยใกล้กัน (ห่าง 0.5) แม้ S.D. ต่างกันมาก (0.20 vs 0.90) → ความเห็นตรงกัน" time="0.000148" classname="test"/>
-	<testcase name="[BL-SD-19] ค่าเฉลี่ยห่างเกิน 1.0 → ใช้ S.D. เลือกฝั่งที่แหล่งคะแนนเห็นตรงกันมากกว่า" time="0.000097" classname="test"/>
-	<testcase name="[BL-SD-20] ขอบเขตพอดี: ค่าเฉลี่ยห่าง 1.00 ทุกคู่ (0.00–9.00) ต้องได้ 'ตรงกัน' และห่าง 1.01 ต้องไม่ใช่" time="0.003173" classname="test"/>
-	<testcase name="[BL-SD-21] Overall_SD สูงผิดปกติยังมาก่อน แม้ค่าเฉลี่ยใกล้กัน → ภาพยนตร์เฉพาะกลุ่ม" time="0.000152" classname="test"/>
-	<testcase name="[BL-SD-22] Property test 20,000 ชุดสุ่มพร้อมค่าเฉลี่ย: 'ตรงกัน' ก็ต่อเมื่อค่าเฉลี่ยห่างไม่เกิน 1.0 และผลอยู่ในชุดคำตอบ 7 ข้อความ" time="0.049783" classname="test"/>
-	<testcase name="[BL-FL-01] ทุกชุดฟิลเตอร์ 7×4×3 × การเรียง 3 แบบ (มี composite index): ครบ ไม่ซ้ำ ไม่หลุดเงื่อนไข หน้าแรกไม่ว่าง" time="9.709710" classname="test"/>
-	<testcase name="[BL-FL-02] ทุกชุดฟิลเตอร์ 7×4×3 × การเรียง 3 แบบ (ไม่มี composite index): ครบ ไม่ซ้ำ ไม่หลุดเงื่อนไข หน้าแรกไม่ว่าง" time="5.937264" classname="test"/>
-	<testcase name="[BL-FL-03] โหมด Genres แบบ array (หลายประเภทต่อเรื่อง) + Year + Type: ผลตรงกับ oracle" time="0.173984" classname="test"/>
-	<testcase name="[BL-FL-04] (Midterm TC8) ฟิลเตอร์ที่ไม่มีหนังเลย → คืนผลว่างและ done=true ไม่ error" time="0.005091" classname="test"/>
-	<testcase name="[BL-FL-05] passesFilters ทำงานแบบ AND: ผ่านครบทุกเงื่อนไขเท่านั้น" time="0.000217" classname="test"/>
-	<testcase name="[BL-FL-06] (Midterm TC2) Genre_for_cal คำเดียวไม่มี comma → ใช้ค่าเดิมทั้งหมด" time="0.000368" classname="test"/>
-	<testcase name="[BL-TR-01] Trending now: ไล่ปี 2026→2025→2024, ในแต่ละปีเรียง Popularity มาก→น้อย, ตัด Popularity &lt; 10 — ลำดับตรงกับ oracle ทุกตำแหน่ง" time="0.213793" classname="test"/>
-	<testcase name="[BL-TR-02] Trending + Genre + Type (มี composite index) → ลำดับตรงกับ oracle" time="0.068387" classname="test"/>
-	<testcase name="[BL-TR-03] Trending + Genre แต่ไม่มี composite index → ถอยไปเรียง Popularity ทั้งฐานข้อมูล (ผลยังผ่านฟิลเตอร์ครบ)" time="0.056442" classname="test"/>
-	<testcase name="[BL-TR-04] เลือกปีเอง หรือค้นหาอยู่ → ไม่ใช้โหมดไล่ปี" time="0.000222" classname="test"/>
-	<testcase name="[BL-SE-01] จัดอันดับผลค้นหา: ชื่อตรงคำค้นมาก่อน แล้วเรียง imdbVotes มาก→น้อย" time="0.040499" classname="test"/>
-	<testcase name="[BL-SE-02] ค้นภาษาไทย: ตัดวรรณยุกต์ก่อนเทียบ ('โอดิสซี่' = 'โอดิสซี')" time="0.000819" classname="test"/>
-	<testcase name="[BL-SE-03] ค้นหา (Firestore fallback เมื่อ Algolia ใช้ไม่ได้): พิมพ์ตัวเล็กก็เจอ ผลขึ้นต้นด้วยคำค้น และผ่านฟิลเตอร์ที่เลือก" time="0.070506" classname="test"/>
-	<testcase name="[BL-SE-04] ค้นหาคำที่ไม่มีในฐานข้อมูล → ผลว่าง ไม่ error" time="0.074695" classname="test"/>
-	<testcase name="[BL-TR-05] หัวข้อ Trending now แสดงช่วงปีจากน้อยไปมาก (2024–2026)" time="0.000713" classname="test"/>
-	<testcase name="[BL-HR-01] สุ่ม Hero 10,000 ครั้ง: ไม่มีเรื่องเดิมติดกันเลย และทุกเรื่องได้ขึ้นภายใน 2 รอบสำรับ" time="0.104079" classname="test"/>
-	<testcase name="[BL-HR-02] รีเฟรชหน้า (อ่านสำรับที่เหลือจาก localStorage): ไม่ได้เรื่องล่าสุดซ้ำ และไม่ซ้ำเรื่องที่แสดงไปแล้วในรอบนี้" time="0.000817" classname="test"/>
-	<testcase name="[BL-HR-03] pool ของ Hero: มีโปสเตอร์ ออกใน 5 ปีล่าสุด และโหวต ≥ 20,000 (ผ่อนเกณฑ์เมื่อได้ไม่ถึง 20 เรื่อง)" time="0.152924" classname="test"/>
-	<testcase name="[BL-HR-04] กดฟิลเตอร์กี่ครั้งก็ไม่ทำให้ Hero เปลี่ยน (Hero แยกจากฟิลเตอร์)" time="0.045181" classname="test"/>
-	<testcase name="[BL-DP-01] ชื่อไทยในหน้า detail: ไม่มีชื่อไทย หรือสะกดเหมือนชื่ออังกฤษ → ซ่อน" time="0.000159" classname="test"/>
-	<testcase name="[BL-DP-02] ชื่อไทยต่างกันแค่ตัวพิมพ์/ช่องว่าง ('dune ' vs 'Dune') → ต้องซ่อนเหมือนกัน" time="0.000138" classname="test"/>
-	<testcase name="[BL-DP-03] ชื่ออังกฤษ: ตัดวงเล็บชื่อไทย/ชื่อซ้ำออก" time="0.000295" classname="test"/>
-	<testcase name="[BL-DP-04] ชื่ออังกฤษที่มีวงเล็บเป็นส่วนหนึ่งของชื่อจริง ต้องไม่ถูกตัด" time="0.000122" classname="test"/>
-	<testcase name="[BL-DP-05] จำนวนโหวต: 999 / 12K / 1M / 1.3M และ 999,999 ต้องแสดง 1M ไม่ใช่ 1000K" time="0.000167" classname="test"/>
-	<testcase name="[BL-DP-06] แปลงตัวเลขจากข้อความ: '1,234,567' '85%' 'N/A' และปีของซีรีส์ '2019–2023'" time="0.000185" classname="test"/>
-	<testcase name="[BL-DP-07] Keyword รองรับทั้ง Array และข้อความคั่นด้วย , | / ;" time="0.000294" classname="test"/>
-	<testcase name="[SEC-01] การ์ดหนัง: ค่า Poster ที่มีเครื่องหมายคำพูด ต้องไม่หลุดออกจาก attribute (กัน HTML injection)" time="0.000201" classname="test"/>
-	<testcase name="[SEC-02] ข้อความชื่อหนังถูก escape ก่อนใส่ HTML" time="0.000124" classname="test"/>
-	<testcase name="[AI-SM-01] คะแนนความใกล้เคียง: keyword / ประเภท / ยุคสมัย" time="0.002050" classname="test"/>
-	<testcase name="[AI-SM-02] LLM ตอบ id ที่ไม่มีจริง → ถูกตัดทิ้ง, ได้ไม่เกิน 6 เรื่อง" time="0.061306" classname="test"/>
-	<testcase name="[AI-SM-03] LLM เลือกหนังต่างยุคมาเกินครึ่ง → ระบบสลับเป็นหนังยุคเดียวกันให้เหลือ ≥ 4 ใน 6 เรื่อง" time="0.046736" classname="test"/>
-	<testcase name="[AI-SM-04] LLM ใช้ไม่ได้ → ใช้การจัดอันดับสำรอง (keyword/ประเภท/ยุค) และบอกผู้ใช้" time="0.038841" classname="test"/>
-	<testcase name="[AI-CB-01] Prompt ส่ง Gemini: role สลับ user/model เสมอ เริ่มและจบด้วย user (property test 2,000 ประวัติสุ่ม)" time="0.009158" classname="test"/>
-	<testcase name="[AI-CB-02] ตอบ JSON ขาดท้าย (ยาวจนโดนตัด) → ยังดึงข้อความ reply ออกมาได้" time="0.001936" classname="test"/>
-	<testcase name="[AI-CB-03] (Midterm TC9 ฉบับปรับ) บอทแนะนำได้เฉพาะหนังที่อยู่ใน DATABASE_CANDIDATES — id ที่แต่งขึ้นถูกตัด และแสดงไม่เกิน 3 เรื่อง" time="0.023497" classname="test"/>
-	<testcase name="[AI-CB-04] ถามว่า 'เรื่องนี้' ตอนไม่ได้เปิดหนังอยู่ → บังคับเป็นโหมดคุยทั่วไป ไม่แนบหนังมั่ว" time="0.046208" classname="test"/>
-	<testcase name="[AI-CB-05] เปิดหน้าหนังอยู่ → Prompt แนบข้อมูลหนังจริง (คะแนน, S.D., Recommend side) ตัวเลขตรงฐานข้อมูล และระบุเมื่อใช้ค่าเฉลี่ยประเภท" time="0.022142" classname="test"/>
-	<testcase name="[AI-CB-06] Gemini ล่ม → โหมดออฟไลน์สรุปจากข้อมูลจริงของหนังที่เปิดอยู่" time="0.019778" classname="test"/>
-	<testcase name="[AI-CB-07] System prompt มีกติกากันแต่งข้อมูล (ตัวเลขต้องตรงข้อมูล, ระบุเมื่อใช้ความรู้ทั่วไป, picks ต้องมาจากฐานข้อมูล)" time="0.000137" classname="test"/>
-	<testcase name="[SW-RS-01] สร้าง structuredQuery: หลายเงื่อนไขเป็น AND, ค่า Year เป็น string, orderBy ต่อท้าย __name__ ตามทิศเดียวกัน" time="0.007053" classname="test"/>
-	<testcase name="[SW-RS-02] ชื่อฟิลด์ที่มีอักขระพิเศษถูกครอบ backtick, cursor จาก snapshot ใช้ค่าทุกฟิลด์ที่เรียง" time="0.000457" classname="test"/>
-	<testcase name="[SW-RS-03] แปลงค่า Firestore ไป-กลับครบทุกชนิด (int/double/string/bool/null/array/map)" time="0.000396" classname="test"/>
-	<testcase name="[SW-FM-01] กดฟิลเตอร์รัว ๆ (request เก่าช้ากว่า) → จอแสดงผลของฟิลเตอร์ล่าสุดเท่านั้น และปลดสถานะ loading" time="0.090036" classname="test"/>
-	<testcase name="[SW-FM-02] เปลี่ยนฟิลเตอร์ 12 ครั้งติดกันแบบสุ่มหน่วงเวลา → สถานะสุดท้ายตรงกับฟิลเตอร์ครั้งสุดท้ายเสมอ (ทำซ้ำ 20 รอบ)" time="1.481800" classname="test"/>
-	<testcase name="[SW-FM-03] เลือกฟิลเตอร์เดิมซ้ำภายใน 5 นาที → แสดงจากแคชทันที ไม่ยิง query ใหม่" time="0.035677" classname="test"/>
-	<testcase name="[SW-FM-04] (Midterm TC5) โหลดหน้าถัดไปหลายครั้ง → ไม่มีหนังซ้ำในรายการ" time="0.264648" classname="test"/>
-	<testcase name="[SW-FM-05] (Midterm TC7) ข้อมูลหมดแล้ว (exhausted) → กดโหลดเพิ่มไม่ยิง query และปุ่มถูกซ่อน" time="0.003893" classname="test"/>
-	<testcase name="[SW-FM-06] (Midterm TC8) ฟิลเตอร์ไม่พบหนัง → ข้อความ 'ไม่พบผลลัพธ์' ไม่ใช่หน้าว่าง/ error" time="0.003033" classname="test"/>
-	<testcase name="[SW-FM-07] ฐานข้อมูลตอบ error → แสดงข้อความโหลดไม่สำเร็จ และปลด loading" time="0.045665" classname="test"/>
-	<testcase name="[RB-01] ถ้าคะแนนที่ไม่มีข้อมูลถูกเก็บเป็นข้อความ 'N/A' (ไม่ใช่ลบฟิลด์) → หมวด Loved by critics หน้าแรกต้องยังมีหนัง" time="0.086930" classname="test"/>
-	<testcase name="[RB-02] Year เก็บเป็นตัวเลขแทนข้อความ → ฟิลเตอร์ปีฝั่ง client ยังถูกต้อง" time="0.000338" classname="test"/>
-	<testcase name="[RB-03] หนังไม่มีโปสเตอร์/เรื่องย่อ/นักแสดง → การ์ดและ prompt ไม่ error" time="0.002529" classname="test"/>
-	<testcase name="[RB-04] (Midterm TC1) หนังไม่มี Metascore หรือ RT → ไม่นับเป็น 0: แสดง N/A และ Recommend side ยังตัดสินได้" time="0.000409" classname="test"/>
-	<testcase name="[BL-HG-01] Hidden gems: คะแนนคนดู > 7.5 และ (โหวต &lt; 50,000 หรือ popularity &lt; 20) และสุ่มชุดใหม่ทุกครั้ง" time="0.118793" classname="test"/>
-	<testcase name="[BL-HG-02] Hidden gems + ฟิลเตอร์ Genre/Year (ไม่มี composite index) → ยังได้ผลที่ผ่านทุกเงื่อนไข" time="0.063787" classname="test"/>
-	<testcase name="[BL-GA-01] อ่าน S.D. ระดับประเภทจาก GENRE_ANALYSIS (มีแคช) และคืน null เมื่อไม่มีประเภทนั้น" time="0.072959" classname="test"/>
-	<testcase name="[BL-SE-05] Algolia: ค้นคำกลางชื่อได้ ผลที่ชื่อตรงมาก่อนและเรียงตามโหวต, มีฟิลเตอร์ → ไล่หลายหน้าจนได้ผลพอ" time="0.103440" classname="test"/>
-	<testcase name="[BL-SE-06] Algolia ค้นไทยมีวรรณยุกต์ไม่เจอ → ลองใหม่แบบตัดวรรณยุกต์อัตโนมัติ" time="0.071000" classname="test"/>
-	<testcase name="[BL-SE-07] Algolia ล่ม → ถอยไปค้นด้วย Firestore อัตโนมัติ (ผู้ใช้ยังค้นเจอ)" time="0.054729" classname="test"/>
-	<testcase name="[AI-CB-08] แผนค้นฐานข้อมูลของแชทบอท mode=top: ได้หนังตรงเงื่อนไข ไม่เกิน 20 เรื่อง" time="0.068816" classname="test"/>
-	<testcase name="[AI-CB-09] แผนค้นฐานข้อมูลของแชทบอท mode=title: ได้หนังตรงเงื่อนไข ไม่เกิน 20 เรื่อง" time="0.057622" classname="test"/>
-	<testcase name="[AI-CB-10] แผนค้นฐานข้อมูลของแชทบอท mode=discovery: ได้หนังตรงเงื่อนไข ไม่เกิน 20 เรื่อง" time="0.091303" classname="test"/>
-	<testcase name="[AI-CB-11] แผนค้นฐานข้อมูลของแชทบอท mode=genre: ได้หนังตรงเงื่อนไข ไม่เกิน 20 เรื่อง" time="0.089407" classname="test"/>
-	<testcase name="[AI-CB-12] mode=similar ขณะเปิดหนังอยู่ → ไม่แนะนำหนังเรื่องเดิม" time="0.077590" classname="test"/>
-	<testcase name="[SW-FM-08] ค้นหาผ่าน fetchMovies: หัวข้อและผลลัพธ์เป็นของคำค้น" time="0.047275" classname="test"/>
-	<testcase name="[BL-RN-01] สุ่มหนังจาก documentId (ใช้ตอน AI ออฟไลน์/หาไม่เจอ) ต้องกระจายทั่วฐานข้อมูล ไม่ได้ชุดเดิมซ้ำ" time="3.741378" classname="test"/>
-	<testcase name="[BL-WR-01] มีคะแนนถ่วงโหวต → Loved by audiences เรียงตาม Audience_Score: หนังดังคะแนนดีมาก่อน หนังโหวต 600 ที่ได้ 9.9 ไม่ขึ้นหน้าแรก" time="0.060597" classname="test"/>
-	<testcase name="[BL-WR-02] Loved by critics และแผน top ของแชทบอทใช้คะแนนถ่วงโหวตเช่นกัน" time="0.049070" classname="test"/>
-	<testcase name="[BL-PR-01] ยังไม่เคยเปิดหนัง → ไม่มีแถว For you; เปิด Horror 2 เรื่อง → For you · สยองขวัญ" time="0.003121" classname="test"/>
-	<testcase name="[BL-PR-02] กดชอบ = +3 และกดซ้ำ = ยกเลิก; เรียงประเภทจากแต้มมากไปน้อย เอา 2 อันดับแรก" time="0.007061" classname="test"/>
-	<testcase name="[BL-PR-03] ประเภทชื่อเดิม (Genre_for_cal) และชื่อเรียกต่างกันนับรวมเป็นประเภทเดียว; หนังที่ไม่มี id ไม่ถูกบันทึก" time="0.000487" classname="test"/>
-	<testcase name="[BL-PR-04] (edge) ข้อมูลใน localStorage เสียหรือผิดรูปแบบ → เริ่มใหม่ ไม่พัง; เปิดเรื่องเดิมซ้ำ seen ไม่ซ้ำ และเก็บไม่เกิน 200 เรื่อง" time="0.011645" classname="test"/>
-	<testcase name="[BL-PR-05] mixForYou: สลับประเภททีละเรื่อง, ไม่ซ้ำ, ข้ามเรื่องที่เคยเปิดและเรื่องไม่มีโปสเตอร์, ไม่เกินจำนวนที่ขอ" time="0.000564" classname="test"/>
-	<testcase name="[BL-PR-06] ข้อมูลส่วนตัวอยู่ในเครื่องเท่านั้น: เก็บแค่ชื่อประเภท แต้ม และรหัส IMDb ของหนัง ไม่มีชื่อ อีเมล หรือข้อความ" time="0.000409" classname="test"/>
-	<testcase name="[BL-PR-07] แถว For you ใช้ตัวกรองเดิมกับฐานข้อมูล: ทุกเรื่องเป็นประเภทที่ชอบ และไม่มีเรื่องที่เคยเปิด" time="0.071183" classname="test"/>
-	<!-- tests 97 -->
+	<testcase name="[BL-SD-01] SD สองฝั่งใกล้กัน (ต่าง 0.10) → ความเห็นตรงกัน" time="0.001738" classname="test"/>
+	<testcase name="[BL-SD-02] SD นักวิจารณ์ต่ำกว่าชัดเจน → เชื่อฝั่งนักวิจารณ์" time="0.000324" classname="test"/>
+	<testcase name="[BL-SD-03] SD คนดูต่ำกว่าชัดเจน → เชื่อฝั่งคนดู" time="0.000112" classname="test"/>
+	<testcase name="[BL-SD-04] ขาด SD นักวิจารณ์ → ใช้ Genre_Critics_SD แทนแล้วเทียบ + แจ้ง note" time="0.000203" classname="test"/>
+	<testcase name="[BL-SD-05] ขาด SD คนดู → ใช้ Genre_Audience_SD แทน" time="0.000121" classname="test"/>
+	<testcase name="[BL-SD-06] Overall_SD ≥ 1.50 → ภาพยนตร์เฉพาะกลุ่ม (มีลำดับความสำคัญเหนือการเทียบฝั่ง)" time="0.000118" classname="test"/>
+	<testcase name="[BL-SD-07] Overall_SD ≥ 1.5 เท่าของ S.D. ประเภท → เฉพาะกลุ่ม แม้ต่ำกว่า 1.50" time="0.000134" classname="test"/>
+	<testcase name="[BL-SD-08] Overall_SD 1.49 และไม่มีค่าประเภท → ไม่ถือว่าเฉพาะกลุ่ม" time="0.000126" classname="test"/>
+	<testcase name="[BL-SD-09] ไม่มีข้อมูล SD เลย → ขาดข้อมูลในการตัดสินใจ" time="0.001393" classname="test"/>
+	<testcase name="[BL-SD-10] มีข้อมูลฝั่งเดียวและไม่มีค่าประเภท → ชี้ไปฝั่งที่มีข้อมูล พร้อม note" time="0.000246" classname="test"/>
+	<testcase name="[BL-SD-11] (Midterm TC4) ประเภทที่มีหนังเรื่องเดียว คำนวณ SD ไม่ได้ (null) → ไม่ error และแจ้งขาดข้อมูล" time="0.000233" classname="test"/>
+	<testcase name="[BL-SD-12] SD = 0 ทั้งสองฝั่ง ถือเป็นข้อมูลจริง (ไม่ใช่ขาดข้อมูล) → ตรงกัน" time="0.000086" classname="test"/>
+	<testcase name="[BL-SD-13] แปลงค่าจากฐานข้อมูล: 'N/A', '', null → null ; '0.35' → 0.35 ; 0 → 0" time="0.000165" classname="test"/>
+	<testcase name="[BL-SD-14] ขอบเขตพอดี: ต่างกัน 0.15 (0.30 vs 0.45) ต้องนับว่า 'ตรงกัน' ตามกติกา 'ไม่เกิน 0.15'" time="0.000880" classname="test"/>
+	<testcase name="[BL-SD-15] ขอบเขตพอดีทุกคู่ค่า 2 ตำแหน่ง (0.00–2.00) ที่ต่างกัน 0.15 ต้องได้ 'ตรงกัน' ทุกคู่" time="0.000941" classname="test"/>
+	<testcase name="[BL-SD-16] Property test 20,000 ชุดสุ่ม: ไม่ throw และผลลัพธ์อยู่ในชุดคำตอบที่กำหนดเท่านั้น (5 ข้อความ)" time="0.046902" classname="test"/>
+	<testcase name="[BL-SD-17] (Mortal Kombat 2021) ค่าเฉลี่ยห่าง 1.62 แต่ S.D. ใกล้กัน (0.78 vs 0.66) → สองฝั่งเห็นต่าง ไม่ใช่ 'ตรงกัน'" time="0.000261" classname="test"/>
+	<testcase name="[BL-SD-18] ค่าเฉลี่ยใกล้กัน (ห่าง 0.5) แม้ S.D. ต่างกันมาก (0.20 vs 0.90) → ความเห็นตรงกัน" time="0.000327" classname="test"/>
+	<testcase name="[BL-SD-19] ค่าเฉลี่ยห่างเกิน 1.0 → ใช้ S.D. เลือกฝั่งที่แหล่งคะแนนเห็นตรงกันมากกว่า" time="0.000130" classname="test"/>
+	<testcase name="[BL-SD-20] ขอบเขตพอดี: ค่าเฉลี่ยห่าง 1.00 ทุกคู่ (0.00–9.00) ต้องได้ 'ตรงกัน' และห่าง 1.01 ต้องไม่ใช่" time="0.003021" classname="test"/>
+	<testcase name="[BL-SD-21] Overall_SD สูงผิดปกติยังมาก่อน แม้ค่าเฉลี่ยใกล้กัน → ภาพยนตร์เฉพาะกลุ่ม" time="0.000138" classname="test"/>
+	<testcase name="[BL-SD-22] Property test 20,000 ชุดสุ่มพร้อมค่าเฉลี่ย: 'ตรงกัน' ก็ต่อเมื่อค่าเฉลี่ยห่างไม่เกิน 1.0 และผลอยู่ในชุดคำตอบ 7 ข้อความ" time="0.062934" classname="test"/>
+	<testcase name="[BL-FL-01] ทุกชุดฟิลเตอร์ 7×4×3 × การเรียง 3 แบบ (มี composite index): ครบ ไม่ซ้ำ ไม่หลุดเงื่อนไข หน้าแรกไม่ว่าง" time="10.614862" classname="test"/>
+	<testcase name="[BL-FL-02] ทุกชุดฟิลเตอร์ 7×4×3 × การเรียง 3 แบบ (ไม่มี composite index): ครบ ไม่ซ้ำ ไม่หลุดเงื่อนไข หน้าแรกไม่ว่าง" time="6.164135" classname="test"/>
+	<testcase name="[BL-FL-03] โหมด Genres แบบ array (หลายประเภทต่อเรื่อง) + Year + Type: ผลตรงกับ oracle" time="0.248071" classname="test"/>
+	<testcase name="[BL-FL-04] (Midterm TC8) ฟิลเตอร์ที่ไม่มีหนังเลย → คืนผลว่างและ done=true ไม่ error" time="0.005686" classname="test"/>
+	<testcase name="[BL-FL-05] passesFilters ทำงานแบบ AND: ผ่านครบทุกเงื่อนไขเท่านั้น" time="0.000305" classname="test"/>
+	<testcase name="[BL-FL-06] (Midterm TC2) Genre_for_cal คำเดียวไม่มี comma → ใช้ค่าเดิมทั้งหมด" time="0.000419" classname="test"/>
+	<testcase name="[BL-TR-01] Trending now: ไล่ปี 2026→2025→2024, ในแต่ละปีเรียง Popularity มาก→น้อย, ตัด Popularity &lt; 10 — ลำดับตรงกับ oracle ทุกตำแหน่ง" time="0.165516" classname="test"/>
+	<testcase name="[BL-TR-02] Trending + Genre + Type (มี composite index) → ลำดับตรงกับ oracle" time="0.064323" classname="test"/>
+	<testcase name="[BL-TR-03] Trending + Genre แต่ไม่มี composite index → ถอยไปเรียง Popularity ทั้งฐานข้อมูล (ผลยังผ่านฟิลเตอร์ครบ)" time="0.065971" classname="test"/>
+	<testcase name="[BL-TR-04] เลือกปีเอง หรือค้นหาอยู่ → ไม่ใช้โหมดไล่ปี" time="0.000176" classname="test"/>
+	<testcase name="[BL-SE-01] จัดอันดับผลค้นหา: ชื่อตรงคำค้นมาก่อน แล้วเรียง imdbVotes มาก→น้อย" time="0.041286" classname="test"/>
+	<testcase name="[BL-SE-02] ค้นภาษาไทย: ตัดวรรณยุกต์ก่อนเทียบ ('โอดิสซี่' = 'โอดิสซี')" time="0.000682" classname="test"/>
+	<testcase name="[BL-SE-03] ค้นหา (Firestore fallback เมื่อ Algolia ใช้ไม่ได้): พิมพ์ตัวเล็กก็เจอ ผลขึ้นต้นด้วยคำค้น และผ่านฟิลเตอร์ที่เลือก" time="0.050383" classname="test"/>
+	<testcase name="[BL-SE-04] ค้นหาคำที่ไม่มีในฐานข้อมูล → ผลว่าง ไม่ error" time="0.052300" classname="test"/>
+	<testcase name="[BL-TR-05] หัวข้อ Trending now แสดงช่วงปีจากน้อยไปมาก (2024–2026)" time="0.000560" classname="test"/>
+	<testcase name="[BL-HR-01] สุ่ม Hero 10,000 ครั้ง: ไม่มีเรื่องเดิมติดกันเลย และทุกเรื่องได้ขึ้นภายใน 2 รอบสำรับ" time="0.091262" classname="test"/>
+	<testcase name="[BL-HR-02] รีเฟรชหน้า (อ่านสำรับที่เหลือจาก localStorage): ไม่ได้เรื่องล่าสุดซ้ำ และไม่ซ้ำเรื่องที่แสดงไปแล้วในรอบนี้" time="0.000731" classname="test"/>
+	<testcase name="[BL-HR-03] pool ของ Hero: มีโปสเตอร์ ออกใน 5 ปีล่าสุด และโหวต ≥ 20,000 (ผ่อนเกณฑ์เมื่อได้ไม่ถึง 20 เรื่อง)" time="0.129750" classname="test"/>
+	<testcase name="[BL-HR-04] กดฟิลเตอร์กี่ครั้งก็ไม่ทำให้ Hero เปลี่ยน (Hero แยกจากฟิลเตอร์)" time="0.031444" classname="test"/>
+	<testcase name="[BL-DP-01] ชื่อไทยในหน้า detail: ไม่มีชื่อไทย หรือสะกดเหมือนชื่ออังกฤษ → ซ่อน" time="0.000243" classname="test"/>
+	<testcase name="[BL-DP-02] ชื่อไทยต่างกันแค่ตัวพิมพ์/ช่องว่าง ('dune ' vs 'Dune') → ต้องซ่อนเหมือนกัน" time="0.000128" classname="test"/>
+	<testcase name="[BL-DP-03] ชื่ออังกฤษ: ตัดวงเล็บชื่อไทย/ชื่อซ้ำออก" time="0.000242" classname="test"/>
+	<testcase name="[BL-DP-04] ชื่ออังกฤษที่มีวงเล็บเป็นส่วนหนึ่งของชื่อจริง ต้องไม่ถูกตัด" time="0.000104" classname="test"/>
+	<testcase name="[BL-DP-05] จำนวนโหวต: 999 / 12K / 1M / 1.3M และ 999,999 ต้องแสดง 1M ไม่ใช่ 1000K" time="0.000188" classname="test"/>
+	<testcase name="[BL-DP-06] แปลงตัวเลขจากข้อความ: '1,234,567' '85%' 'N/A' และปีของซีรีส์ '2019–2023'" time="0.000252" classname="test"/>
+	<testcase name="[BL-DP-07] Keyword รองรับทั้ง Array และข้อความคั่นด้วย , | / ;" time="0.000247" classname="test"/>
+	<testcase name="[SEC-01] การ์ดหนัง: ค่า Poster ที่มีเครื่องหมายคำพูด ต้องไม่หลุดออกจาก attribute (กัน HTML injection)" time="0.000174" classname="test"/>
+	<testcase name="[SEC-02] ข้อความชื่อหนังถูก escape ก่อนใส่ HTML" time="0.000103" classname="test"/>
+	<testcase name="[AI-SM-01] คะแนนความใกล้เคียง: keyword / ประเภท / ยุคสมัย" time="0.001769" classname="test"/>
+	<testcase name="[AI-SM-02] LLM ตอบ id ที่ไม่มีจริง → ถูกตัดทิ้ง, ได้ไม่เกิน 6 เรื่อง" time="0.063720" classname="test"/>
+	<testcase name="[AI-SM-03] LLM เลือกหนังต่างยุคมาเกินครึ่ง → ระบบสลับเป็นหนังยุคเดียวกันให้เหลือ ≥ 4 ใน 6 เรื่อง" time="0.052317" classname="test"/>
+	<testcase name="[AI-SM-04] LLM ใช้ไม่ได้ → ใช้การจัดอันดับสำรอง (keyword/ประเภท/ยุค) และบอกผู้ใช้" time="0.042345" classname="test"/>
+	<testcase name="[AI-CB-01] Prompt ส่ง Gemini: role สลับ user/model เสมอ เริ่มและจบด้วย user (property test 2,000 ประวัติสุ่ม)" time="0.009995" classname="test"/>
+	<testcase name="[AI-CB-02] ตอบ JSON ขาดท้าย (ยาวจนโดนตัด) → ยังดึงข้อความ reply ออกมาได้" time="0.002002" classname="test"/>
+	<testcase name="[AI-CB-03] (Midterm TC9 ฉบับปรับ) บอทแนะนำได้เฉพาะหนังที่อยู่ใน DATABASE_CANDIDATES — id ที่แต่งขึ้นถูกตัด และแสดงไม่เกิน 3 เรื่อง" time="0.026871" classname="test"/>
+	<testcase name="[AI-CB-04] ถามว่า 'เรื่องนี้' ตอนไม่ได้เปิดหนังอยู่ → บังคับเป็นโหมดคุยทั่วไป ไม่แนบหนังมั่ว" time="0.034651" classname="test"/>
+	<testcase name="[AI-CB-05] เปิดหน้าหนังอยู่ → Prompt แนบข้อมูลหนังจริง (คะแนน, S.D., Recommend side) ตัวเลขตรงฐานข้อมูล และระบุเมื่อใช้ค่าเฉลี่ยประเภท" time="0.024705" classname="test"/>
+	<testcase name="[AI-CB-06] Gemini ล่ม → โหมดออฟไลน์สรุปจากข้อมูลจริงของหนังที่เปิดอยู่" time="0.039358" classname="test"/>
+	<testcase name="[AI-CB-07] System prompt มีกติกากันแต่งข้อมูล (ตัวเลขต้องตรงข้อมูล, ระบุเมื่อใช้ความรู้ทั่วไป, picks ต้องมาจากฐานข้อมูล)" time="0.000214" classname="test"/>
+	<testcase name="[SW-RS-01] สร้าง structuredQuery: หลายเงื่อนไขเป็น AND, ค่า Year เป็น string, orderBy ต่อท้าย __name__ ตามทิศเดียวกัน" time="0.004703" classname="test"/>
+	<testcase name="[SW-RS-02] ชื่อฟิลด์ที่มีอักขระพิเศษถูกครอบ backtick, cursor จาก snapshot ใช้ค่าทุกฟิลด์ที่เรียง" time="0.000637" classname="test"/>
+	<testcase name="[SW-RS-03] แปลงค่า Firestore ไป-กลับครบทุกชนิด (int/double/string/bool/null/array/map)" time="0.000483" classname="test"/>
+	<testcase name="[SW-FM-01] กดฟิลเตอร์รัว ๆ (request เก่าช้ากว่า) → จอแสดงผลของฟิลเตอร์ล่าสุดเท่านั้น และปลดสถานะ loading" time="0.095648" classname="test"/>
+	<testcase name="[SW-FM-02] เปลี่ยนฟิลเตอร์ 12 ครั้งติดกันแบบสุ่มหน่วงเวลา → สถานะสุดท้ายตรงกับฟิลเตอร์ครั้งสุดท้ายเสมอ (ทำซ้ำ 20 รอบ)" time="1.494803" classname="test"/>
+	<testcase name="[SW-FM-03] เลือกฟิลเตอร์เดิมซ้ำภายใน 5 นาที → แสดงจากแคชทันที ไม่ยิง query ใหม่" time="0.051171" classname="test"/>
+	<testcase name="[SW-FM-04] (Midterm TC5) โหลดหน้าถัดไปหลายครั้ง → ไม่มีหนังซ้ำในรายการ" time="0.232568" classname="test"/>
+	<testcase name="[SW-FM-05] (Midterm TC7) ข้อมูลหมดแล้ว (exhausted) → กดโหลดเพิ่มไม่ยิง query และปุ่มถูกซ่อน" time="0.007605" classname="test"/>
+	<testcase name="[SW-FM-06] (Midterm TC8) ฟิลเตอร์ไม่พบหนัง → ข้อความ 'ไม่พบผลลัพธ์' ไม่ใช่หน้าว่าง/ error" time="0.006770" classname="test"/>
+	<testcase name="[SW-FM-07] ฐานข้อมูลตอบ error → แสดงข้อความโหลดไม่สำเร็จ และปลด loading" time="0.049155" classname="test"/>
+	<testcase name="[RB-01] ถ้าคะแนนที่ไม่มีข้อมูลถูกเก็บเป็นข้อความ 'N/A' (ไม่ใช่ลบฟิลด์) → หมวด Loved by critics หน้าแรกต้องยังมีหนัง" time="0.094390" classname="test"/>
+	<testcase name="[RB-02] Year เก็บเป็นตัวเลขแทนข้อความ → ฟิลเตอร์ปีฝั่ง client ยังถูกต้อง" time="0.000323" classname="test"/>
+	<testcase name="[RB-03] หนังไม่มีโปสเตอร์/เรื่องย่อ/นักแสดง → การ์ดและ prompt ไม่ error" time="0.000577" classname="test"/>
+	<testcase name="[RB-04] (Midterm TC1) หนังไม่มี Metascore หรือ RT → ไม่นับเป็น 0: แสดง N/A และ Recommend side ยังตัดสินได้" time="0.000422" classname="test"/>
+	<testcase name="[BL-HG-01] Hidden gems: คะแนนคนดู > 7.5 และ (โหวต &lt; 50,000 หรือ popularity &lt; 20) และสุ่มชุดใหม่ทุกครั้ง" time="0.122257" classname="test"/>
+	<testcase name="[BL-HG-02] Hidden gems + ฟิลเตอร์ Genre/Year (ไม่มี composite index) → ยังได้ผลที่ผ่านทุกเงื่อนไข" time="0.073171" classname="test"/>
+	<testcase name="[BL-GA-01] อ่าน S.D. ระดับประเภทจาก GENRE_ANALYSIS (มีแคช) และคืน null เมื่อไม่มีประเภทนั้น" time="0.057808" classname="test"/>
+	<testcase name="[BL-SE-05] Algolia: ค้นคำกลางชื่อได้ ผลที่ชื่อตรงมาก่อนและเรียงตามโหวต, มีฟิลเตอร์ → ไล่หลายหน้าจนได้ผลพอ" time="0.053568" classname="test"/>
+	<testcase name="[BL-SE-06] Algolia ค้นไทยมีวรรณยุกต์ไม่เจอ → ลองใหม่แบบตัดวรรณยุกต์อัตโนมัติ" time="0.042289" classname="test"/>
+	<testcase name="[BL-SE-07] Algolia ล่ม → ถอยไปค้นด้วย Firestore อัตโนมัติ (ผู้ใช้ยังค้นเจอ)" time="0.050128" classname="test"/>
+	<testcase name="[AI-CB-08] แผนค้นฐานข้อมูลของแชทบอท mode=top: ได้หนังตรงเงื่อนไข ไม่เกิน 20 เรื่อง" time="0.066811" classname="test"/>
+	<testcase name="[AI-CB-09] แผนค้นฐานข้อมูลของแชทบอท mode=title: ได้หนังตรงเงื่อนไข ไม่เกิน 20 เรื่อง" time="0.042773" classname="test"/>
+	<testcase name="[AI-CB-10] แผนค้นฐานข้อมูลของแชทบอท mode=discovery: ได้หนังตรงเงื่อนไข ไม่เกิน 20 เรื่อง" time="0.049744" classname="test"/>
+	<testcase name="[AI-CB-11] แผนค้นฐานข้อมูลของแชทบอท mode=genre: ได้หนังตรงเงื่อนไข ไม่เกิน 20 เรื่อง" time="0.038426" classname="test"/>
+	<testcase name="[AI-CB-12] mode=similar ขณะเปิดหนังอยู่ → ไม่แนะนำหนังเรื่องเดิม" time="0.087969" classname="test"/>
+	<testcase name="[SW-FM-08] ค้นหาผ่าน fetchMovies: หัวข้อและผลลัพธ์เป็นของคำค้น" time="0.084259" classname="test"/>
+	<testcase name="[BL-RN-01] สุ่มหนังจาก documentId (ใช้ตอน AI ออฟไลน์/หาไม่เจอ) ต้องกระจายทั่วฐานข้อมูล ไม่ได้ชุดเดิมซ้ำ" time="4.247721" classname="test"/>
+	<testcase name="[BL-WR-01] มีคะแนนถ่วงโหวต → Loved by audiences เรียงตาม Audience_Score: หนังดังคะแนนดีมาก่อน หนังโหวต 600 ที่ได้ 9.9 ไม่ขึ้นหน้าแรก" time="0.054591" classname="test"/>
+	<testcase name="[BL-WR-02] Loved by critics และแผน top ของแชทบอทใช้คะแนนถ่วงโหวตเช่นกัน" time="0.046535" classname="test"/>
+	<testcase name="[BL-PR-01] ยังไม่เคยเปิดหนัง → ไม่มีแถว For you; เปิด Horror 2 เรื่อง → For you · สยองขวัญ" time="0.003279" classname="test"/>
+	<testcase name="[BL-PR-02] กดชอบ = +3 และกดซ้ำ = ยกเลิก; เรียงประเภทจากแต้มมากไปน้อย เอา 2 อันดับแรก" time="0.010749" classname="test"/>
+	<testcase name="[BL-PR-03] ประเภทชื่อเดิม (Genre_for_cal) และชื่อเรียกต่างกันนับรวมเป็นประเภทเดียว; หนังที่ไม่มี id ไม่ถูกบันทึก" time="0.000530" classname="test"/>
+	<testcase name="[BL-PR-04] (edge) ข้อมูลใน localStorage เสียหรือผิดรูปแบบ → เริ่มใหม่ ไม่พัง; เปิดเรื่องเดิมซ้ำ seen ไม่ซ้ำ และเก็บไม่เกิน 200 เรื่อง" time="0.013843" classname="test"/>
+	<testcase name="[BL-PR-05] mixForYou: สลับประเภททีละเรื่อง, ไม่ซ้ำ, ข้ามเรื่องที่เคยเปิดและเรื่องไม่มีโปสเตอร์, ไม่เกินจำนวนที่ขอ" time="0.000514" classname="test"/>
+	<testcase name="[BL-PR-06] ข้อมูลส่วนตัวอยู่ในเครื่องเท่านั้น: เก็บแค่ชื่อประเภท แต้ม และรหัส IMDb ของหนัง ไม่มีชื่อ อีเมล หรือข้อความ" time="0.000377" classname="test"/>
+	<testcase name="[BL-PR-07] แถว For you ใช้ตัวกรองเดิมกับฐานข้อมูล: ทุกเรื่องเป็นประเภทที่ชอบ และไม่มีเรื่องที่เคยเปิด" time="0.064881" classname="test"/>
+	<testcase name="[BL-SM-01] เปิด The Avengers → แถวภาคอื่นในชุด เรียงตามปีฉาย เรื่องที่กำลังดูถูกไฮไลต์" time="0.066789" classname="test"/>
+	<testcase name="[BL-SM-02] (edge) ไม่อยู่ชุดไหน / CollectionID = 0 / ชุดที่มีแค่เรื่องเดียว / ผู้ใช้เปิดเรื่องอื่นระหว่างรอ → ไม่แสดงแถว" time="0.036398" classname="test"/>
+	<testcase name="[BL-SM-03] ค่ายผลิตเดียวกันได้คะแนนเพิ่ม; ข้อมูลค่าย/ชุดที่ผิดรูปแบบไม่นับ" time="0.001118" classname="test"/>
+	<testcase name="[BL-SM-04] คัดหนังที่คนรู้จัก: ตัดเรื่องที่โหวตน้อยกว่า 20% ของต้นทาง (ขั้นต่ำ 5,000) เฉพาะเมื่อยังเหลือ ≥ 8 เรื่อง" time="0.000466" classname="test"/>
+	<testcase name="[BL-SM-05] If you like…: ดึงหนังค่ายเดียวกันมาเป็นตัวเลือกแม้ต่างประเภท และไม่ซ้ำเรื่องในชุดเดียวกัน" time="0.059950" classname="test"/>
+	<testcase name="[BL-SM-06] ตัวเลือกประเภท+ยุคเดียวกันเรียงจากโหวตมากก่อน; ไม่มี composite index ก็ยังได้ตัวเลือก (fallback)" time="0.083089" classname="test"/>
+	<!-- tests 103 -->
 	<!-- suites 0 -->
-	<!-- pass 97 -->
+	<!-- pass 103 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
 	<!-- todo 0 -->
-	<!-- duration_ms 16037.369902 -->
+	<!-- duration_ms 17232.50096 -->
 </testsuites>

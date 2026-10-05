@@ -260,6 +260,7 @@
         .rating-card .score-val-small { font-size: 26px; font-weight: 700; color: #fff; margin-top: 6px; }
 
         .suggested-section { margin-top: 60px; max-width: 1200px; margin-left: auto; margin-right: auto; border-top: 1px solid #233554; padding-top: 40px; }
+        .movie-card.is-current { outline: 2px solid #ff6600; outline-offset: -2px; }
         .suggest-note { font-size: 12px; color: #8892b0; font-weight: 300; margin-top: -10px; margin-bottom: 18px; }
 
         .load-more-wrap { text-align: center; padding: 30px 0; width: 100%; }
@@ -559,6 +560,16 @@
                     <div class="rating-card"><div class="box-title">TMDb</div><div class="score-val-small" id="d-tmdb">N/A</div></div>
                 </div>
             </section>
+        </div>
+
+        <div class="suggested-section" id="collection-section" style="display:none">
+            <div class="section-header" id="collection-title">ภาคอื่นในชุดนี้</div>
+            <p class="suggest-note">เรียงตามปีที่ฉาย จากข้อมูลชุดภาพยนตร์ของ TMDB</p>
+            <div class="row-wrap">
+                <button class="row-arrow left" type="button" aria-label="เลื่อนซ้าย" onclick="scrollRow('collectionGrid', -1)">‹</button>
+                <div class="suggested-grid" id="collectionGrid"></div>
+                <button class="row-arrow right" type="button" aria-label="เลื่อนขวา" onclick="scrollRow('collectionGrid', 1)">›</button>
+            </div>
         </div>
 
         <div class="suggested-section">
@@ -2572,6 +2583,7 @@
             syncHeaderHeight();
             jumpTo(0);
             updateChatContext();
+            renderCollectionRow(movie);
             fetchSimilarMovies(movie);
 
             const genreSD = await getGenreSD(movie.Genre_for_cal);
@@ -2649,13 +2661,77 @@
             return B.filter(g => A.has(g)).length / Math.max(A.size, B.length);
         }
 
-        // คะแนนคัดตัวเลือกก่อนส่งให้ LLM — ยุคสมัยมีน้ำหนักรองจาก keyword
+        // ชุดภาพยนตร์ (ภาคต่อ) และค่ายผลิต จาก TMDB — weekly_update.py เติมให้ (CollectionID 0 = ไม่อยู่ชุดไหน)
+        const FAMILIAR = { share: 0.2, floor: 5000, keep: 8 };   // ตัดหนังที่โหวตน้อยกว่า 20% ของต้นทาง (ขั้นต่ำ 5,000) ถ้ายังเหลือ ≥ 8 เรื่อง
+
+        function getCollectionId(m) {
+            const v = Number(m?.CollectionID);
+            return Number.isInteger(v) && v > 0 ? v : 0;
+        }
+
+        function getCompanies(m) {
+            return Array.isArray(m?.Companies) ? m.Companies.filter(c => Number.isInteger(c) && c > 0) : [];
+        }
+
+        function sameCollection(a, b) {
+            const c = getCollectionId(a);
+            return c > 0 && c === getCollectionId(b);
+        }
+
+        // 1 = มีค่ายผลิตร่วมกันอย่างน้อยหนึ่งค่าย (เช่น Marvel Studios)
+        function companyOverlap(a, b) {
+            const A = new Set(getCompanies(a));
+            return A.size && getCompanies(b).some(c => A.has(c)) ? 1 : 0;
+        }
+
+        // หนังที่คนรู้จักพอ ๆ กับต้นทาง — ถ้าตัดแล้วเหลือน้อยเกินไปใช้รายการเดิม
+        function keepFamiliar(base, list) {
+            const min = Math.max(FAMILIAR.floor, getVotes(base) * FAMILIAR.share);
+            const ok = list.filter(m => getVotes(m) >= min);
+            return ok.length >= FAMILIAR.keep ? ok : list;
+        }
+
+        // คะแนนคัดตัวเลือกก่อนส่งให้ LLM — ยุคสมัยมีน้ำหนักรองจาก keyword, ค่ายเดียวกันช่วยเล็กน้อย
         function preScore(base, cand) {
             return keywordOverlap(base, cand) * 2.2
                  + eraCloseness(base, cand) * 1.6
                  + genreOverlap(base, cand) * 0.9
-                 + Math.min(0.6, Math.log10(getVotes(cand) + 1) / 10)
+                 + companyOverlap(base, cand) * 0.8
+                 + Math.min(1, Math.log10(getVotes(cand) + 1) / 6)
                  + Math.min(0.4, getPopularity(cand) / 500);
+        }
+
+        function sortByRelease(list) {
+            return list.slice().sort((a, b) => (getYear(a) || 9999) - (getYear(b) || 9999)
+                || String(a.Released || "").localeCompare(String(b.Released || "")));
+        }
+
+        // เรื่องทั้งหมดในชุดเดียวกัน (รวมเรื่องที่กำลังดู) เรียงตามปีฉาย — where เท่ากับฟิลด์เดียว ไม่ต้องสร้าง index
+        async function loadCollection(movie) {
+            const cid = getCollectionId(movie);
+            if (!cid) return [];
+            try {
+                const snap = await getDocs(query(collection(db, targetCollection), where("CollectionID", "==", cid), limit(40)));
+                return sortByRelease(snap.docs.map(docToMovie).filter(m => m.Poster && m.Poster !== "N/A"));
+            } catch (e) { reportIndexError(e); return []; }
+        }
+
+        async function renderCollectionRow(movie) {
+            const sec = document.getElementById("collection-section");
+            const grid = document.getElementById("collectionGrid");
+            sec.style.display = "none";
+            grid.innerHTML = "";
+            const list = await loadCollection(movie);
+            if (lastOpenedMovie && lastOpenedMovie !== movie) return;   // ผู้ใช้เปิดเรื่องอื่นไปแล้วระหว่างรอ
+            if (!list.some(m => m.id !== movie.id)) return;
+            document.getElementById("collection-title").innerText =
+                movie.CollectionName ? `ภาคอื่นในชุด ${movie.CollectionName}` : "ภาคอื่นในชุดนี้";
+            list.forEach(m => {
+                const card = buildCard(m, m.id === movie.id ? "กำลังดู" : "");
+                if (m.id === movie.id) card.classList.add("is-current");
+                grid.appendChild(card);
+            });
+            sec.style.display = "";
         }
 
         function eraTag(base, m) {
@@ -2676,20 +2752,38 @@
             const primaryGenre = movieGenres(movie)[0] || "";
             const baseYear = getYear(movie);
             const pool = new Map();
+            // เรื่องในชุดเดียวกันอยู่แถว "ภาคอื่นในชุดนี้" แล้ว ไม่ต้องซ้ำใน If you like…
             const add = list => list.forEach(m => {
-                if (m.id !== movie.id && m.Poster && !pool.has(m.id)) pool.set(m.id, m);
+                if (m.id !== movie.id && m.Poster && !pool.has(m.id) && !sameCollection(movie, m)) pool.set(m.id, m);
             });
 
-            // 1) หมวดเดียวกัน + ยุคใกล้เคียง (±7 ปี)
+            // 0) ค่ายผลิตเดียวกัน (เช่น Marvel Studios) ที่คนรู้จัก
+            const company = getCompanies(movie)[0];
+            if (company) {
+                try {
+                    const snap = await runQuerySafe(
+                        [where("Companies", "array-contains", company), orderBy("Popularity", "desc"), limit(40)],
+                        [where("Companies", "array-contains", company), limit(40)]
+                    );
+                    add(snap.docs.map(docToMovie));
+                } catch (e) { reportIndexError(e); }
+            }
+
+            // 1) หมวดเดียวกัน + ยุคใกล้เคียง (±7 ปี) — เรียงจากโหวตมากก่อน (ไม่มี index ใช้แบบไม่เรียง)
             if (baseYear) {
                 const years = [];
                 for (let y = baseYear - ERA_SPAN; y <= baseYear + ERA_SPAN; y++) if (y > 1900) years.push(y);
                 const yearWhere = where("Year", "in", yearInValues(years));
+                const filters = primaryGenre ? [genreWhere(primaryGenre), yearWhere] : (genre ? [where("Genre_for_cal", "==", genre), yearWhere] : [yearWhere]);
+                const byVotes = (votesField && votesNumeric) ? votesField : "Popularity";
                 try {
-                    const snap = await runQuerySafe(
-                        primaryGenre ? [genreWhere(primaryGenre), yearWhere, limit(60)] : (genre ? [where("Genre_for_cal", "==", genre), yearWhere, limit(60)] : [yearWhere, limit(60)]),
-                        [yearWhere, limit(60)]
-                    );
+                    let snap;
+                    try {
+                        snap = await getDocs(query(collection(db, targetCollection), ...filters, orderBy(byVotes, "desc"), limit(60)));
+                    } catch (e) {
+                        reportIndexError(e);
+                        snap = await runQuerySafe([...filters, limit(60)], [yearWhere, limit(60)]);
+                    }
                     add(snap.docs.map(docToMovie));
                 } catch (e) { reportIndexError(e); }
             }
@@ -2723,6 +2817,7 @@
 - ให้น้ำหนักกับหนังที่อยู่ในยุคใกล้เคียงกับหนังต้นทางก่อนเสมอ ถ้าหนังต้นทางเป็นหนังใหม่ ให้เลือกหนังใหม่
 - ควรมีอย่างน้อย 4 ใน 6 เรื่องที่ปีห่างจากหนังต้นทางไม่เกิน 10 ปี
 - จะหยิบหนังคลาสสิกต่างยุคมาได้ไม่เกิน 2 เรื่อง และเฉพาะตอนที่ธีมตรงกันชัดเจนจริง ๆ
+sameStudio = true คือค่ายผลิตเดียวกับหนังต้นทาง ใช้ประกอบได้ แต่ตัดสินจากโทนเรื่องเป็นหลัก
 ห้ามแต่งเรื่องหรือ id ที่ไม่มีใน CANDIDATES
 ตอบเป็น JSON เท่านั้น: {"summary":"สรุปสั้นๆ ว่าทำไมกลุ่มนี้ถึงเข้ากัน","picks":[{"id":"docId","tag":"คำสั้นๆ ไม่เกิน 12 ตัวอักษร"}]}
 เลือกมาไม่เกิน 6 เรื่อง`;
@@ -2746,6 +2841,7 @@
                     const near = candidates.filter(m => Math.abs(getYear(m) - baseYear) <= ERA_HARD_LIMIT);
                     if (near.length >= 8) candidates = near;
                 }
+                candidates = keepFamiliar(currentMovie, candidates);
 
                 const shortlist = candidates
                     .map(m => ({ m, s: preScore(currentMovie, m) }))
@@ -2768,6 +2864,7 @@
                             title: getEnglishTitle(m),
                             year: m.Year || null,
                             keywords: getKeywords(m).slice(0, 10),
+                            sameStudio: companyOverlap(currentMovie, m) === 1,
                             plot: String(m.Plot || "").slice(0, 220)
                         }))
                     };
@@ -2791,7 +2888,7 @@
                                 const filler = shortlist
                                     .filter(m => Math.abs(getYear(m) - baseYear) <= 10 && !picks.some(p => p.movie.id === m.id))
                                     .sort((a, b) => preScore(currentMovie, b) - preScore(currentMovie, a));
-                                while (picks.length > 3 && filler.length && picks.filter(p => Math.abs(getYear(p.movie) - baseYear) <= 10).length < 4) {
+                                while (filler.length && picks.filter(p => Math.abs(getYear(p.movie) - baseYear) <= 10).length < Math.min(4, picks.length)) {
                                     const drop = picks.map((p, i) => [i, Math.abs(getYear(p.movie) - baseYear)])
                                         .sort((a, b) => b[1] - a[1])[0];
                                     if (!drop || drop[1] <= 10) break;

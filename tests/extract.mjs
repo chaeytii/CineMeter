@@ -48,6 +48,7 @@ const NAMES = [
   "readStore", "writeStore", "isHeroCandidate", "buildHeroPool", "shuffled", "pickHero",
   // personalized (PERS-01, v7_9 เท่านั้น)
   "?TASTE_KEY", "?TASTE", "?readTaste", "?addGenreScore", "?recordTaste", "?toggleLike", "?topGenres", "?mixForYou", "?forYouRow",
+  "?FAMILIAR", "?getCollectionId", "?getCompanies", "?sameCollection", "?companyOverlap", "?keepFamiliar", "?sortByRelease", "?loadCollection", "?renderCollectionRow",
   // recommend side
   "getGenreSD", "decideTrustSide", "isDetailOpen",
   // similarity ("If you like…")
