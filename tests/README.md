@@ -9,8 +9,8 @@
 
 ```bash
 cd tests
-./run-tests.sh v7_8     # ก่อนแก้: ผ่าน 75/103
-./run-tests.sh v7_9     # ส่งมอบ: ผ่าน 103/103
+./run-tests.sh v7_8     # ก่อนแก้: ผ่าน 76/105
+./run-tests.sh v7_9     # ส่งมอบ: ผ่าน 105/105
 python3 make-v7_9.py ../cinemeter-v7_8.html ../cinemeter-v7_9.html   # สร้าง v7_9 จาก v7_8 ใหม่ (แก้ 9 จุด + ย้าย Gemini key ไป Cloud Function 3 จุด + จัดอันดับแบบถ่วงโหวต 8 จุด)
 ```
 
@@ -21,10 +21,10 @@ python3 make-v7_9.py ../cinemeter-v7_8.html ../cinemeter-v7_9.html   # สร้
 | ไฟล์ | หน้าที่ |
 |---|---|
 | `extract.mjs`, `lib-extract.mjs` | ดึงโค้ดจาก HTML → `cinemeter-logic-<version>.mjs` (+ แผนที่เลขบรรทัด `*-map.txt`) |
-| `test/*.test.mjs` | เทสต์ 103 เคส แบ่งกลุ่ม BL / AI / SW / RB / SEC (`09-weighted-rank` = จัดอันดับแบบถ่วงโหวต, `10-personalized` = แถว For you, `11-franchise` = ภาคต่อ/ค่ายผลิต) |
-| `helpers/fake-firestore.mjs` | Firestore จำลอง (เทียบชนิดข้อมูลเข้มงวด, error เมื่อไม่มี composite index) |
+| `test/*.test.mjs` | เทสต์ 105 เคส แบ่งกลุ่ม BL / AI / SW / RB / SEC (`09-weighted-rank` = จัดอันดับแบบถ่วงโหวต, `10-personalized` = แถว For you, `11-franchise` = ภาคต่อ/ค่ายผลิต, `12-genre-indexes` = ทุก query ตอนกรองด้วย Genres มี index ใน `firestore.indexes.json`) |
+| `helpers/fake-firestore.mjs` | Firestore จำลอง (เทียบชนิดข้อมูลเข้มงวด, error เมื่อไม่มี composite index — ส่งรายการ index จาก `firestore.indexes.json` ให้ตรวจแบบเดียวกับ Firestore จริงได้) |
 | `helpers/dataset.mjs` | ข้อมูลสังเคราะห์รูปแบบเดียวกับ MOVIES |
 | `helpers/dom-stub.mjs` | DOM จำลองสำหรับฟังก์ชันที่แตะหน้าจอ |
-| `make-v7_9.py` | แพตช์แก้บั๊กที่พบ + เปลี่ยนแชทบอทให้เรียก Gemini ผ่าน Cloud Function + จัดอันดับแบบถ่วงโหวต + กฎ Recommend side จากค่าเฉลี่ย (RULE-02) + ตาราง Trending now เต็มแถว (GRID-01) + แถว For you (PERS-01) + ภาคต่อ/ค่ายผลิตใน More like this (SIM-02) (แต่ละจุดต้องเจอแค่ครั้งเดียว) |
+| `make-v7_9.py` | แพตช์แก้บั๊กที่พบ + เปลี่ยนแชทบอทให้เรียก Gemini ผ่าน Cloud Function + จัดอันดับแบบถ่วงโหวต + กฎ Recommend side จากค่าเฉลี่ย (RULE-02) + ตาราง Trending now เต็มแถว (GRID-01) + แถว For you (PERS-01) + ภาคต่อ/ค่ายผลิตใน More like this (SIM-02) + คอมเมนต์เรื่อง Genres (GEN-01) (แต่ละจุดต้องเจอแค่ครั้งเดียว) |
 | `smoke.py` | เปิดทั้งสองเวอร์ชันใน Chromium ตรวจ JavaScript error |
 | `build-check-page.mjs`, `check-page/` | สร้างหน้า `cinemeter-live-check.html` (รวมหัวข้อ EDA: กราฟการกระจายคะแนน ช่องห่างตามประเภท ข้อมูลที่ขาด ดาวน์โหลด PNG/CSV ได้) และทดสอบหน้านั้นกับบริการจำลอง |

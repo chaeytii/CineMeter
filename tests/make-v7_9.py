@@ -404,6 +404,9 @@ PATCHES = [
     ('SIM-02 same-era swap also for short lists',
      '                                while (picks.length > 3 && filler.length && picks.filter(p => Math.abs(getYear(p.movie) - baseYear) <= 10).length < 4) {\n',
      '                                while (filler.length && picks.filter(p => Math.abs(getYear(p.movie) - baseYear) <= 10).length < Math.min(4, picks.length)) {\n'),
+    ('GEN-01 genres comment',
+     '         * สร้างโดยสคริปต์ tmdb-genres-migrate.mjs (ดึงประเภทจาก TMDB)\n         * สคริปต์จะเขียน META/genres = { complete: true } เมื่ออัปเดตครบทุกเรื่อง\n',
+     '         * firebase-upload/weekly_update.py เติมให้ทุกเรื่องจาก TMDB (ชุดแรกเก็บแค่ประเภทแรกใน Genre_for_cal)\n         * แล้วเขียน META/genres = { complete: true } เมื่อครบทุกเรื่องและ composite index ใน firestore.indexes.json พร้อม\n'),
 ]
 for name, old, new in PATCHES:
     n = src.count(old)

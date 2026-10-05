@@ -22,6 +22,8 @@ class FakeStore:
         self.genres = dict(genres or {})
         self.meta = {}
         self.writes = {}
+        self.index_ready = False          # composite index ของ Genres (deploy แล้วและสร้างเสร็จ)
+        self.index_checks = 0
 
     def read_movies(self, fields):
         if fields is None:
@@ -30,6 +32,10 @@ class FakeStore:
 
     def read_genres(self):
         return dict(self.genres)
+
+    def genres_index_ready(self):
+        self.index_checks += 1
+        return self.index_ready
 
     def read_doc(self, collection, doc_id):
         return dict(self.meta[doc_id]) if collection == "META" and doc_id in self.meta else None
@@ -118,7 +124,7 @@ class FakeApis:
         if path.startswith("find/"):
             imdb_id = path.split("/")[1]
             for (kind, tid), d in self.tmdb.items():
-                if d["external_ids"]["imdb_id"] == imdb_id:
+                if isinstance(d, dict) and d["external_ids"]["imdb_id"] == imdb_id:
                     return FakeResponse({"movie_results" if kind == "movie" else "tv_results":
                                          [{"id": tid, "vote_count": d.get("vote_count", 0)}]})
             return FakeResponse({"movie_results": [], "tv_results": []})
@@ -129,7 +135,9 @@ class FakeApis:
             return FakeResponse({"results": results if q.get("page") == "1" else [], "total_pages": 1})
         kind, tid = path.split("/")
         d = self.tmdb.get((kind, int(tid)))
-        return FakeResponse(d if d else {"success": False}, 200 if d else 404)
+        if d == "ERROR":
+            return FakeResponse({}, 500)              # TMDB ล่มชั่วคราว
+        return FakeResponse(d if d else {"success": False, "status_code": 34}, 200 if d else 404)
 
 
 def tmdb_movie(tid, imdb_id, year="2025", vote=7.0, pop=50.0, genre="ดราม่า"):
@@ -149,9 +157,18 @@ def existing(imdb_rating="7.0", votes="10,000", tmdb=7.0, meta="70", rt="80%", *
     d = {"imdbRating": imdb_rating, "imdbVotes": votes, "tmdbRating": tmdb, "Metascore": meta, "TomatoScore": rt,
          "Popularity": 10.0, "tmdbID": extra.pop("tmdbID", 1), "MediaType": "ภาพยนตร์", "Released": "2010-01-01",
          "tmdbVotes": "100",
-         "Year": "2010", "Genre_for_cal": "ดราม่า"}
+         "Year": "2010", "Genre_for_cal": "ดราม่า",
+         # สถานะหลังเติมข้อมูลจาก TMDB แล้ว (เทสต์ที่ทดสอบการเติมใช้ unfilled())
+         "Genres": ["หนังชีวิต"], "CollectionID": 0, "CollectionName": "", "Companies": []}
     d.update(wu.score_fields(meta, rt, imdb_rating, tmdb))
     d.update(extra)
+    return d
+
+
+def unfilled(d):
+    """เรื่องเก่าจากชุดแรกที่ยังไม่มี Genres / ชุดภาพยนตร์ / ค่ายผลิต"""
+    for k in ("Genres", "CollectionID", "CollectionName", "Companies"):
+        d.pop(k, None)
     return d
 
 
@@ -466,6 +483,15 @@ class WeeklyUpdateTest(unittest.TestCase):
         aliases = set(re.findall(r'"([^"]+)":', html[html.index("const GENRE_CANONICAL"):].split(";")[0]))
         self.assertEqual({k: v for k, v in pairs.items() if k not in aliases}, wu.GENRE_VARIANTS)
 
+    def test_index_file_matches_the_index_check(self):
+        root = pathlib.Path(__file__).resolve().parent.parent
+        spec = json.loads(root.joinpath("firestore.indexes.json").read_text(encoding="utf-8"))
+        got = {(tuple(f["fieldPath"] for f in ix["fields"][1:-1]), ix["fields"][-1]["fieldPath"], ix["fields"][-1]["order"])
+               for ix in spec["indexes"] if ix["fields"][0] == {"fieldPath": "Genres", "arrayConfig": "CONTAINS"}}
+        want = {(eq, f, d) for eq in wu.GENRE_INDEX_FILTERS for f, d in wu.GENRE_INDEX_ORDERS}
+        self.assertEqual(got, want)
+        self.assertEqual(json.loads(root.joinpath("firebase.json").read_text())["firestore"]["indexes"], "firestore.indexes.json")
+
     def test_menu_genres_mapping(self):
         self.assertEqual(wu.menu_genres(["บู๊, ผจญภัย", "แอนนิเมชั่น"]), ["บู๊", "ผจญ", "แอนนิเมชั่น"])
         self.assertEqual(wu.menu_genres(["จิตนิมิตแนววิทยาศาสตร์", "ละคร"]), ["จินตนาการ", "นิยายวิทยาศาสตร์", "หนังชีวิต"])
@@ -478,16 +504,67 @@ class WeeklyUpdateTest(unittest.TestCase):
                         FakeApis({("movie", 60): d}, {"tt6000000": omdb()}))
         self.assertEqual(store.writes["MOVIES"]["tt6000000"]["Genres"], ["แอนนิเมชั่น", "ตลก"])
 
-    def test_old_titles_get_genres_only_when_meta_complete(self):
-        d = tmdb_movie(70, "tt0000020"); d["genres"] = [{"name": "สยองขวัญ"}]
+    def test_old_titles_get_all_genres_whether_or_not_meta_complete(self):
+        d = tmdb_movie(70, "tt0000020"); d["genres"] = [{"name": "นิยายวิทยาศาสตร์"}, {"name": "บู๊"}, {"name": "ผจญภัย"}]
         for complete in (False, True):
-            store = FakeStore({"tt0000020": existing(tmdbID=70)})
+            store = FakeStore({"tt0000020": unfilled(existing(tmdbID=70, Genre_for_cal="นิยายวิทยาศาสตร์"))})
             if complete:
                 store.meta["genres"] = {"complete": True}
             stats = self.run_update(store, ratings_of(tt0000020=("7.0", 10000)), {}, FakeApis({("movie", 70): d}, {}))
-            got = store.movies["tt0000020"].get("Genres")
-            self.assertEqual(got, ["สยองขวัญ"] if complete else None, f"complete={complete}")
-            self.assertEqual(stats["genres_filled"], 1 if complete else 0)
+            self.assertEqual(store.movies["tt0000020"]["Genres"], ["นิยายวิทยาศาสตร์", "บู๊", "ผจญภัย"], f"complete={complete}")
+            self.assertEqual(stats["genres_filled"], 1)
+
+    def test_genres_fall_back_to_first_genre_so_no_title_waits_forever(self):
+        empty = tmdb_movie(82, "tt0000082"); empty["genres"] = []
+        movies = {"tt0000081": unfilled(existing(tmdbID="N/A", Genre_for_cal="บู๊, ผจญภัย", MediaType="ซีรีส์")),
+                  "tt0000082": unfilled(existing(tmdbID=82, Genre_for_cal="สยองขวัญ")),
+                  "tt0000083": unfilled(existing(tmdbID=83, Genre_for_cal="ตลก")),       # TMDB ไม่มีเรื่องนี้แล้ว (404)
+                  "tt0000084": unfilled(existing(tmdbID=84, Genre_for_cal="N/A")),
+                  "tt0000085": unfilled(existing(tmdbID=85, Genre_for_cal="ระทึกขวัญ"))}  # TMDB ล่มชั่วคราว
+        store = FakeStore(movies)
+        stats = self.run_update(store, ratings_of(**{k: ("7.0", 10000) for k in movies}), {},
+                                FakeApis({("movie", 82): empty, ("movie", 85): "ERROR"}, {}))
+        got = {k: store.movies[k].get("Genres") for k in movies}
+        self.assertEqual(got, {"tt0000081": ["บู๊", "ผจญ"], "tt0000082": ["สยองขวัญ"], "tt0000083": ["ตลก"],
+                               "tt0000084": [], "tt0000085": None})
+        self.assertEqual(store.movies["tt0000083"]["CollectionID"], 0)
+        self.assertEqual(stats["genres_missing"], 1)                           # รอลองใหม่รอบหน้า
+        self.assertEqual(store.index_checks, 0)
+        self.assertNotIn("genres", store.meta)
+
+    def test_meta_genres_switches_only_when_every_title_has_genres_and_index_is_ready(self):
+        def run(index_ready, dry_run=False, already=False):
+            store = FakeStore(scored({"tt0000086": existing(tmdbID=86), "tt0000087": existing(tmdbID=87)}))
+            store.index_ready = index_ready
+            if already:
+                store.meta["genres"] = {"complete": True, "completedAt": "2026-10-01"}
+            stats = self.run_update(store, ratings_of(tt0000086=("7.0", 10000), tt0000087=("7.0", 10000)), {},
+                                    FakeApis({}, {}), dry_run=dry_run)
+            return store, stats
+        store, stats = run(index_ready=True)
+        self.assertEqual(store.writes["META"]["genres"], {"complete": True, "completedAt": TODAY.isoformat()})
+        self.assertTrue(stats["genres_mode"].startswith("สลับเป็นใช้ Genres"))
+        store, stats = run(index_ready=False)
+        self.assertNotIn("genres", store.writes.get("META", {}))
+        self.assertIn("รอ index", stats["genres_mode"])
+        store, stats = run(index_ready=True, dry_run=True)
+        self.assertEqual((store.writes, store.index_checks), ({}, 0))
+        store, stats = run(index_ready=True, already=True)
+        self.assertNotIn("genres", store.writes.get("META", {}))
+        self.assertEqual(store.index_checks, 0)
+        self.assertEqual(stats["genres_mode"], "ใช้ Genres (META/genres.complete)")
+
+    def test_genres_backfill_is_sent_to_algolia(self):
+        movies = scored({f"tt00004{i:02d}": existing(tmdbID=400 + i) for i in range(3)})
+        movies["tt0000400"].pop("Genres")
+        tmdb = {("movie", 400): tmdb_movie(400, "tt0000400", genre="บู๊")}
+        algolia = FakeAlgolia({k: dict(v, imdbID=k) for k, v in movies.items()})
+        store = FakeStore(movies)
+        store.meta["ranking"] = {"priorAudience": 7.0, "priorCritics": 7.5}
+        self.run_update(store, ratings_of(**{k: ("7.0", 10000) for k in movies}), {}, FakeApis(tmdb, {}),
+                        algolia=algolia, today=dt.date(2026, 10, 12))
+        sent = [r for m, p, b in algolia.calls if p.endswith("/batch") for r in b["requests"]]
+        self.assertEqual([(r["objectID"], r["body"].get("Genres")) for r in sent], [("tt0000400", ["บู๊"])])
 
     def test_new_titles_get_collection_and_companies(self):
         d = tmdb_movie(80, "tt8000000")
@@ -505,8 +582,9 @@ class WeeklyUpdateTest(unittest.TestCase):
         for tid in (91, 92, 93):
             tmdb[("movie", tid)] = tmdb_movie(tid, f"tt00000{tid}")
         tmdb[("movie", 91)]["belongs_to_collection"] = {"id": 10, "name": "Trilogy"}
-        movies = {"tt0000091": existing(votes="500,000", tmdbID=91), "tt0000092": existing(votes="1,000", tmdbID=92),
-                  "tt0000093": existing(votes="80,000", tmdbID=93)}
+        movies = {"tt0000091": unfilled(existing(votes="500,000", tmdbID=91)),
+                  "tt0000092": unfilled(existing(votes="1,000", tmdbID=92)),
+                  "tt0000093": unfilled(existing(votes="80,000", tmdbID=93))}
         apis = FakeApis(tmdb, {})
         detail_calls = []
         real_get = apis.get
@@ -530,7 +608,7 @@ class WeeklyUpdateTest(unittest.TestCase):
         self.assertEqual(store.movies["tt0000092"]["Companies"], [])
 
     def test_franchise_only_changes_are_not_sent_to_algolia(self):
-        movies = scored({f"tt00002{i:02d}": existing(tmdbID=200 + i) for i in range(5)})
+        movies = scored({f"tt00002{i:02d}": dict(unfilled(existing(tmdbID=200 + i)), Genres=["หนังชีวิต"]) for i in range(5)})
         tmdb = {("movie", 200 + i): tmdb_movie(200 + i, f"tt00002{i:02d}") for i in range(5)}
         algolia = FakeAlgolia({k: dict(v, imdbID=k) for k, v in movies.items()})
         store = FakeStore(movies)
@@ -543,7 +621,7 @@ class WeeklyUpdateTest(unittest.TestCase):
         self.assertEqual(sent, [])
 
     def test_dry_run_details_backfill_is_capped_and_writes_nothing(self):
-        movies = {f"tt0003{i:03d}": existing(tmdbID=300 + i) for i in range(80)}
+        movies = {f"tt0003{i:03d}": unfilled(existing(tmdbID=300 + i)) for i in range(80)}
         tmdb = {("movie", 300 + i): tmdb_movie(300 + i, f"tt0003{i:03d}") for i in range(80)}
         store = FakeStore(movies)
         stats = self.run_update(store, ratings_of(**{k: ("7.0", 10000) for k in movies}), {},
