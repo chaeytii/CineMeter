@@ -1910,7 +1910,9 @@
          * PERSONALIZED แบบไม่ต้องล็อกอิน (PERS-01)
          * เบราว์เซอร์เครื่องนั้นจำเอง (localStorage) ว่าผู้ใช้ชอบหนังประเภทไหน ไม่มีอะไรส่งขึ้นเซิร์ฟเวอร์
          * - เปิดหน้ารายละเอียด 1 ครั้ง = ประเภทของเรื่องนั้นได้ +1, กด ♥ = +3 (กดซ้ำ = ยกเลิก -3)
-         * - ประเภทที่ได้ตั้งแต่ 2 แต้มขึ้นไป 2 อันดับแรก -> แถว "For you" บนหน้าแรก ไม่ซ้ำเรื่องที่เปิดดูแล้ว
+         * - แถว "For you" บนหน้าแรก = หนังคล้าย 3 เรื่องล่าสุดที่กด ♥ (PERS-02) + หนังจากประเภทที่ได้ตั้งแต่ 2 แต้มขึ้นไป 2 อันดับแรก
+ *   ไม่ซ้ำเรื่องที่เปิดดูหรือกดชอบแล้ว และโหลดใหม่ทุกครั้งที่ประวัติเปลี่ยน
+ * - แถว "Your likes" = เรื่องที่กด ♥ ไว้ ใหม่สุดก่อน (เก็บแค่รหัสหนังในเครื่อง)
          * - เปลี่ยนเครื่องหรือล้างข้อมูลเบราว์เซอร์ = เริ่มนับใหม่ / กด "ล้างประวัติ" ได้ทุกเมื่อ
          * ----------------------------------------------------------- */
         const TASTE_KEY = "cinemeter:taste:v1";
@@ -1976,11 +1978,45 @@
             return out;
         }
 
+        const FOR_YOU_SEEDS = 3;   // ใช้เรื่องที่กดชอบล่าสุดกี่เรื่องหาหนังคล้ายกัน
+
         function forYouRow(t = readTaste()) {
             const genres = topGenres(t);
-            if (!genres.length) return null;
-            return { key: "foryou", forYou: true, genres, title: "For you",
-                     f: { genre: genres[0], popular: "Audience_Average" } };
+            const seeds = t.liked.slice(0, FOR_YOU_SEEDS);
+            if (!genres.length && !seeds.length) return null;
+            // sig เปลี่ยนทุกครั้งที่ประวัติเปลี่ยน -> กลับหน้าแรกแล้วแถวโหลดใหม่ (ตัดเรื่องที่เพิ่งเปิด/กดชอบออก)
+            const sig = [genres.join("|"), seeds.join("|"), t.liked.length, t.seen.length].join("#");
+            return { key: "foryou", forYou: true, personal: true, genres, seeds, sig, title: "For you",
+                     f: { genre: genres[0] || "", popular: "Audience_Average" } };
+        }
+
+        // แถวเรื่องที่กด ♥ ไว้ ใหม่สุดก่อน — ยังไม่เคยกดชอบ = ไม่มีแถว
+        function likedRow(t = readTaste()) {
+            if (!t.liked.length) return null;
+            const ids = t.liked.slice(0, ROW_SIZE);
+            return { key: "liked", liked: true, personal: true, ids, sig: ids.join("|"), title: "Your likes", f: {} };
+        }
+
+        // หนังจากรหัส (เรื่องที่กดชอบเก็บแค่รหัสในเครื่อง) — ข้ามเรื่องที่ไม่พบ อ่านไม่ได้ หรือไม่มีโปสเตอร์ คงลำดับเดิม
+        async function loadMoviesByIds(ids) {
+            const out = await Promise.all(ids.map(async id => {
+                try {
+                    const snap = await getDoc(doc(db, targetCollection, id));
+                    return snap.exists() ? docToMovie(snap) : null;
+                } catch (e) { return null; }
+            }));
+            return out.filter(m => m && m.Poster && m.Poster !== "N/A");
+        }
+
+        // หนังคล้ายเรื่องที่กดชอบ: ใช้ตัวคัดของ More like this (ประเภท ยุค ค่ายผลิต keyword) โดยไม่เรียก AI — จำผลไว้ต่อเรื่อง
+        const similarCache = new Map();
+        function similarToLiked(seed) {
+            if (!similarCache.has(seed.id)) {
+                similarCache.set(seed.id, buildCandidatePool(seed)
+                    .then(pool => keepFamiliar(seed, pool).slice().sort((a, b) => preScore(seed, b) - preScore(seed, a)))
+                    .catch(() => { similarCache.delete(seed.id); return []; }));
+            }
+            return similarCache.get(seed.id);
         }
 
         function syncLikeButton(movie) {
@@ -2209,9 +2245,9 @@
             return out;
         }
 
-        // id ที่แถวด้านบนแสดงไปแล้ว — รอแถวด้านบนที่กำลังโหลดก่อน ผลจึงเหมือนเดิมไม่ว่าแถวไหนโหลดเสร็จก่อน (แถว For you ไม่นับ)
+        // id ที่แถวด้านบนแสดงไปแล้ว — รอแถวด้านบนที่กำลังโหลดก่อน ผลจึงเหมือนเดิมไม่ว่าแถวไหนโหลดเสร็จก่อน (แถว For you / Your likes ไม่นับ)
         async function shownAbove(key) {
-            const rows = homeRowsNow().filter(r => !r.forYou);
+            const rows = homeRowsNow().filter(r => !r.personal);
             const above = rows.slice(0, Math.max(0, rows.findIndex(r => r.key === key)));
             await Promise.all(above.map(r => homePending.get(r.key)).filter(Boolean));
             const ids = new Set();
@@ -2225,16 +2261,16 @@
 
         // แถวหน้าแรกตอนนี้ = For you (ถ้ามี) + แถวหมวดตายตัว
         function homeRowsNow() {
-            const fy = forYouRow();
-            return fy ? [fy, ...HOME_ROWS] : HOME_ROWS;
+            const t = readTaste();
+            return [forYouRow(t), likedRow(t), ...HOME_ROWS].filter(Boolean);
         }
 
         function homeRowHtml(r) {
-            const link = r.forYou
+            const link = r.liked ? "" : r.forYou
                 ? `<span><a class="row-link" onclick="openRow('${r.key}')">ดูทั้งหมด ›</a> <a class="row-link" onclick="clearTaste()">ล้างประวัติ</a></span>`
                 : `<a class="row-link" onclick="openRow('${r.key}')">ดูทั้งหมด ›</a>`;
             return `
-                <section class="home-row" data-row="${r.key}"${r.forYou ? ` data-genres="${escapeHtml(r.genres.join("|"))}"` : ""}>
+                <section class="home-row" data-row="${r.key}"${r.personal ? ` data-sig="${escapeHtml(r.sig)}"` : ""}>
                     <div class="section-header">
                         <span>${escapeHtml(r.title)}</span>
                         ${link}
@@ -2251,15 +2287,19 @@
         function ensureForYouRow() {
             const wrap = document.getElementById("homeRows");
             if (!wrap || !wrap.childElementCount) return;
-            const fy = forYouRow();
-            const cur = wrap.querySelector('.home-row[data-row="foryou"]');
-            const want = fy ? fy.genres.join("|") : "";
-            if (cur && cur.dataset.genres === want) return;
-            if (cur) cur.remove();
-            rowState.delete("foryou");
-            if (!fy) return;
-            wrap.insertAdjacentHTML("afterbegin", homeRowHtml(fy));
-            loadHomeRow("foryou");
+            const t = readTaste();
+            let anchor = null;   // แถวส่วนตัวเรียงต่อกันบนสุด: For you แล้ว Your likes
+            for (const [key, row] of [["foryou", forYouRow(t)], ["liked", likedRow(t)]]) {
+                const cur = wrap.querySelector(`.home-row[data-row="${key}"]`);
+                if (cur && row && cur.dataset.sig === row.sig) { anchor = cur; continue; }
+                if (cur) cur.remove();
+                rowState.delete(key);
+                if (!row) continue;
+                if (anchor) anchor.insertAdjacentHTML("afterend", homeRowHtml(row));
+                else wrap.insertAdjacentHTML("afterbegin", homeRowHtml(row));
+                anchor = wrap.querySelector(`.home-row[data-row="${key}"]`);
+                loadHomeRow(key);
+            }
         }
 
         window.openRow = function (key) {
@@ -2309,10 +2349,14 @@
                 const f = rowFilters(row);
                 let movies;
                 if (row.forYou) {
-                    // ดึงหนังที่คนดูชอบในแต่ละประเภทที่ผู้ใช้ชอบ แล้วสลับกันทีละเรื่อง
-                    const lists = [];
+                    // หนังคล้ายเรื่องที่กดชอบล่าสุด + หนังที่คนดูชอบในประเภทที่ผู้ใช้ชอบ สลับกันทีละเรื่อง
+                    const t = readTaste();
+                    const seeds = await loadMoviesByIds(row.seeds || []);
+                    const lists = await Promise.all(seeds.map(similarToLiked));
                     for (const g of row.genres) lists.push((await loadRanked(f.popular, null, { ...f, genre: g })).movies.filter(m => !familyCartoonOutOfPlace(m, g)));
-                    movies = mixForYou(lists, readTaste().seen, ROW_SIZE);
+                    movies = mixForYou(lists, [...t.seen, ...t.liked], ROW_SIZE);
+                } else if (row.liked) {
+                    movies = await loadMoviesByIds(row.ids);
                 } else {
                     const fetchPage = cursor => f.popular === "random" ? loadDiscovery(cursor, f) : loadRanked(f.popular, cursor, f);
                     let res = await fetchPage(null);

@@ -470,6 +470,33 @@ PATCHES = [
      '                        movies = pickRowMovies(list, taken, ROW_SIZE, f.genre);\n'
      '                    }\n'
      '                    homeShown.set(key, movies.map(m => m.id));\n'),
+    ('PERS-02 header comment',
+     ' * - ประเภทที่ได้ตั้งแต่ 2 แต้มขึ้นไป 2 อันดับแรก -> แถว "For you" บนหน้าแรก ไม่ซ้ำเรื่องที่เปิดดูแล้ว\n',
+     ' * - แถว "For you" บนหน้าแรก = หนังคล้าย 3 เรื่องล่าสุดที่กด ♥ (PERS-02) + หนังจากประเภทที่ได้ตั้งแต่ 2 แต้มขึ้นไป 2 อันดับแรก\n *   ไม่ซ้ำเรื่องที่เปิดดูหรือกดชอบแล้ว และโหลดใหม่ทุกครั้งที่ประวัติเปลี่ยน\n * - แถว "Your likes" = เรื่องที่กด ♥ ไว้ ใหม่สุดก่อน (เก็บแค่รหัสหนังในเครื่อง)\n'),
+    ('PERS-02 rows from likes',
+     '        function forYouRow(t = readTaste()) {\n            const genres = topGenres(t);\n            if (!genres.length) return null;\n            return { key: "foryou", forYou: true, genres, title: "For you",\n                     f: { genre: genres[0], popular: "Audience_Average" } };\n        }\n',
+     '        const FOR_YOU_SEEDS = 3;   // ใช้เรื่องที่กดชอบล่าสุดกี่เรื่องหาหนังคล้ายกัน\n\n        function forYouRow(t = readTaste()) {\n            const genres = topGenres(t);\n            const seeds = t.liked.slice(0, FOR_YOU_SEEDS);\n            if (!genres.length && !seeds.length) return null;\n            // sig เปลี่ยนทุกครั้งที่ประวัติเปลี่ยน -> กลับหน้าแรกแล้วแถวโหลดใหม่ (ตัดเรื่องที่เพิ่งเปิด/กดชอบออก)\n            const sig = [genres.join("|"), seeds.join("|"), t.liked.length, t.seen.length].join("#");\n            return { key: "foryou", forYou: true, personal: true, genres, seeds, sig, title: "For you",\n                     f: { genre: genres[0] || "", popular: "Audience_Average" } };\n        }\n\n        // แถวเรื่องที่กด ♥ ไว้ ใหม่สุดก่อน — ยังไม่เคยกดชอบ = ไม่มีแถว\n        function likedRow(t = readTaste()) {\n            if (!t.liked.length) return null;\n            const ids = t.liked.slice(0, ROW_SIZE);\n            return { key: "liked", liked: true, personal: true, ids, sig: ids.join("|"), title: "Your likes", f: {} };\n        }\n\n        // หนังจากรหัส (เรื่องที่กดชอบเก็บแค่รหัสในเครื่อง) — ข้ามเรื่องที่ไม่พบ อ่านไม่ได้ หรือไม่มีโปสเตอร์ คงลำดับเดิม\n        async function loadMoviesByIds(ids) {\n            const out = await Promise.all(ids.map(async id => {\n                try {\n                    const snap = await getDoc(doc(db, targetCollection, id));\n                    return snap.exists() ? docToMovie(snap) : null;\n                } catch (e) { return null; }\n            }));\n            return out.filter(m => m && m.Poster && m.Poster !== "N/A");\n        }\n\n        // หนังคล้ายเรื่องที่กดชอบ: ใช้ตัวคัดของ More like this (ประเภท ยุค ค่ายผลิต keyword) โดยไม่เรียก AI — จำผลไว้ต่อเรื่อง\n        const similarCache = new Map();\n        function similarToLiked(seed) {\n            if (!similarCache.has(seed.id)) {\n                similarCache.set(seed.id, buildCandidatePool(seed)\n                    .then(pool => keepFamiliar(seed, pool).slice().sort((a, b) => preScore(seed, b) - preScore(seed, a)))\n                    .catch(() => { similarCache.delete(seed.id); return []; }));\n            }\n            return similarCache.get(seed.id);\n        }\n'),
+    ('PERS-02 dedupe skips personal rows',
+     '(แถว For you ไม่นับ)\n        async function shownAbove(key) {\n            const rows = homeRowsNow().filter(r => !r.forYou);\n',
+     '(แถว For you / Your likes ไม่นับ)\n        async function shownAbove(key) {\n            const rows = homeRowsNow().filter(r => !r.personal);\n'),
+    ('PERS-02 home rows include likes',
+     '            const fy = forYouRow();\n            return fy ? [fy, ...HOME_ROWS] : HOME_ROWS;\n',
+     '            const t = readTaste();\n            return [forYouRow(t), likedRow(t), ...HOME_ROWS].filter(Boolean);\n'),
+    ('PERS-02 row header',
+     '            const link = r.forYou\n',
+     '            const link = r.liked ? "" : r.forYou\n'),
+    ('PERS-02 row signature attribute',
+     '${r.forYou ? ` data-genres="${escapeHtml(r.genres.join("|"))}"` : ""}',
+     '${r.personal ? ` data-sig="${escapeHtml(r.sig)}"` : ""}'),
+    ('PERS-02 refresh personal rows',
+     '            const fy = forYouRow();\n            const cur = wrap.querySelector(\'.home-row[data-row="foryou"]\');\n            const want = fy ? fy.genres.join("|") : "";\n            if (cur && cur.dataset.genres === want) return;\n            if (cur) cur.remove();\n            rowState.delete("foryou");\n            if (!fy) return;\n            wrap.insertAdjacentHTML("afterbegin", homeRowHtml(fy));\n            loadHomeRow("foryou");\n',
+     '            const t = readTaste();\n            let anchor = null;   // แถวส่วนตัวเรียงต่อกันบนสุด: For you แล้ว Your likes\n            for (const [key, row] of [["foryou", forYouRow(t)], ["liked", likedRow(t)]]) {\n                const cur = wrap.querySelector(`.home-row[data-row="${key}"]`);\n                if (cur && row && cur.dataset.sig === row.sig) { anchor = cur; continue; }\n                if (cur) cur.remove();\n                rowState.delete(key);\n                if (!row) continue;\n                if (anchor) anchor.insertAdjacentHTML("afterend", homeRowHtml(row));\n                else wrap.insertAdjacentHTML("afterbegin", homeRowHtml(row));\n                anchor = wrap.querySelector(`.home-row[data-row="${key}"]`);\n                loadHomeRow(key);\n            }\n'),
+    ('PERS-02 load For you from likes',
+     '                    // ดึงหนังที่คนดูชอบในแต่ละประเภทที่ผู้ใช้ชอบ แล้วสลับกันทีละเรื่อง\n                    const lists = [];\n',
+     '                    // หนังคล้ายเรื่องที่กดชอบล่าสุด + หนังที่คนดูชอบในประเภทที่ผู้ใช้ชอบ สลับกันทีละเรื่อง\n                    const t = readTaste();\n                    const seeds = await loadMoviesByIds(row.seeds || []);\n                    const lists = await Promise.all(seeds.map(similarToLiked));\n'),
+    ('PERS-02 skip seen and liked',
+     '                    movies = mixForYou(lists, readTaste().seen, ROW_SIZE);\n                } else {\n',
+     '                    movies = mixForYou(lists, [...t.seen, ...t.liked], ROW_SIZE);\n                } else if (row.liked) {\n                    movies = await loadMoviesByIds(row.ids);\n                } else {\n'),
 ]
 for name, old, new in PATCHES:
     n = src.count(old)
