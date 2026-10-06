@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CineMeter User Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #061121; --card: #0d1b30; --line: #233554; --text: #e6edf7; --muted: #8892b0; --accent: #ff6600; --ok: #4ade80; --bad: #f87171; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', 'IBM Plex Sans Thai', sans-serif; line-height: 1.6; }
+  main { max-width: 680px; margin: 0 auto; padding: 24px 16px 64px; }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; }
+  header b { font-size: 18px; }
+  .progress { flex: 1; max-width: 220px; height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; }
+  .progress i { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  h1 { font-size: 22px; margin: 0 0 12px; }
+  h2 { font-size: 17px; margin: 20px 0 8px; }
+  p, li { color: var(--text); }
+  .muted { color: var(--muted); font-size: 14px; }
+  ul { padding-left: 20px; }
+  label.opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin: 6px 0; cursor: pointer; }
+  label.opt:has(input:checked) { border-color: var(--accent); background: rgba(255,102,0,.08); }
+  input[type=radio], input[type=checkbox] { accent-color: var(--accent); margin-top: 5px; }
+  input[type=text], input[type=number], textarea { width: 100%; background: #08162a; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; }
+  textarea { min-height: 80px; resize: vertical; }
+  .scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .scale label { text-align: center; border: 1px solid var(--line); border-radius: 10px; padding: 8px 0; cursor: pointer; }
+  .scale label:has(input:checked) { border-color: var(--accent); background: rgba(255,102,0,.12); }
+  .scale input { display: none; }
+  .scale-ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; flex-wrap: wrap; }
+  button { font: inherit; font-weight: 600; border-radius: 999px; padding: 10px 22px; cursor: pointer; border: 1px solid var(--accent); }
+  button.primary { background: var(--accent); color: #0a192f; }
+  button.ghost { background: transparent; color: var(--accent); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .film { font-size: 20px; font-weight: 700; }
+  .badge { display: inline-block; font-size: 12px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .links { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 12px 0; }
+  .links a, a.big { display: block; text-align: center; padding: 10px; border-radius: 10px; border: 1px solid var(--line); color: var(--text); text-decoration: none; }
+  .links a:hover, a.big:hover { border-color: var(--accent); }
+  .timer { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; }
+  .note { border-left: 3px solid var(--accent); padding: 8px 12px; background: rgba(255,102,0,.06); border-radius: 0 8px 8px 0; font-size: 14px; }
+  .err { color: var(--bad); font-size: 14px; min-height: 1em; }
+  pre { white-space: pre-wrap; word-break: break-all; background: #08162a; border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-size: 12px; }
+  .reset { background: none; border: none; color: var(--muted); font-size: 12px; padding: 0; text-decoration: underline; }
+</style>
+</head>
+<body>
+<main>
+  <header><b>CineMeter · ทดสอบการใช้งาน</b><div class="progress"><i id="bar"></i></div></header>
+  <div class="card" id="screen"></div>
+  <p class="muted" style="text-align:center;margin-top:16px"><button class="reset" type="button" id="resetBtn">เริ่มใหม่ทั้งหมด (สำหรับผู้วิจัย)</button></p>
+</main>
+<script>
+/* -------------------------------------------------------------
+ * หน้าทดสอบกับผู้ใช้ (รายงานข้อ 2.3) — ผู้ทดลองทำเองได้คนเดียว ระบบจับเวลาให้
+ * ไม่ส่งข้อมูลไปที่ไหนเอง: จบแล้วผู้ทดลองคัดลอกผลไปวางใน Google Form (FORM_URL)
+ * ความคืบหน้าเก็บใน localStorage ของเครื่องผู้ทดลอง รีเฟรชแล้วทำต่อได้
+ * ----------------------------------------------------------- */
+const FORM_URL = "";   // ลิงก์ Google Form ที่มีคำถามเดียว "วางผลการทดสอบ" (ว่าง = ให้ส่งผลให้ผู้วิจัยเอง)
+const CINEMETER_URL = "https://chaeytii.github.io/CineMeter/";
+const STORE_KEY = "cinemeter:usertest:v1";
+
+// หนัง 2 ชุด ชุดละ 2 เรื่อง — เฉลยข้อ (ก) คือฝั่งที่ S.D. ต่ำกว่า (แหล่งคะแนนให้ใกล้กันกว่า) จากฐานข้อมูลจริง
+const SETS = {
+  1: [
+    { id: "tt7069210", title: "The Conjuring: The Devil Made Me Do It", year: 2021, answer: "critics" },
+    { id: "tt0172495", title: "Gladiator", year: 2000, answer: "audience" }
+  ],
+  2: [
+    { id: "tt16366836", title: "Venom: The Last Dance", year: 2024, answer: "critics" },
+    { id: "tt0114369", title: "Seven", year: 1995, answer: "audience" }
+  ]
+};
+const METHOD = {
+  A: { name: "วิธี A: เปิดเว็บรีวิวเอง", short: "เว็บรีวิวเอง" },
+  B: { name: "วิธี B: ใช้ CineMeter", short: "CineMeter" }
+};
+const SIDE_TH = { critics: "นักวิจารณ์", audience: "คนดู", unsure: "บอกไม่ได้" };
+
+// ลำดับสลับจากเลขรหัส (counterbalance 4 แบบ): ใครทำ A ก่อน และชุดไหนใช้กับวิธี A
+function planFor(code) {
+  const n = parseInt(String(code).replace(/\D/g, ""), 10);
+  const k = (n - 1) % 4;
+  const order = k % 2 === 0 ? ["A", "B"] : ["B", "A"];
+  const setForA = k < 2 ? 1 : 2;
+  const setFor = { A: setForA, B: setForA === 1 ? 2 : 1 };
+  return { order, setFor };
+}
+
+function validCode(code) { return /^P([1-9]\d?)$/i.test(String(code).trim()); }
+
+// ---------- state ----------
+function blank() {
+  return { step: "consent", code: "", plan: null, block: 0, film: 0, startedAt: null, tasks: [], ratings: {}, foryou: {}, notes: {}, finishedAt: null };
+}
+function load() {
+  try { const s = JSON.parse(localStorage.getItem(STORE_KEY)); return s && s.step ? s : blank(); } catch (e) { return blank(); }
+}
+function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { } }
+let state = load();
+
+function result() {
+  return {
+    v: 1, id: state.code, order: state.plan.order.join(""), setA: state.plan.setFor.A,
+    tasks: state.tasks.map(t => ({ film: t.id, method: t.method, set: t.set, sec: t.sec, side: t.side, correct: t.correct, watch: t.watch, sites: t.sites })),
+    ratings: state.ratings, foryou: state.foryou, notes: state.notes, at: state.finishedAt
+  };
+}
+
+// ---------- rendering helpers ----------
+const $ = sel => document.querySelector(sel);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function radio(name, value, label, extra = "") {
+  return `<label class="opt"><input type="radio" name="${name}" value="${esc(value)}"${extra}><span>${label}</span></label>`;
+}
+function scale(name, low, high) {
+  return `<div class="scale">${[1, 2, 3, 4, 5].map(v => `<label><input type="radio" name="${name}" value="${v}">${v}</label>`).join("")}</div>
+          <div class="scale-ends"><span>${low}</span><span>${high}</span></div>`;
+}
+const picked = name => { const el = document.querySelector(`input[name="${name}"]:checked`); return el ? el.value : null; };
+function progress() {
+  const steps = ["consent", "screen", "code", "intro", "task", "rate", "foryou", "notes", "done"];
+  let i = steps.indexOf(state.step);
+  if (state.step === "task" || state.step === "rate") i = 4 + (state.block * 3 + state.film + (state.step === "rate" ? 2 : 0)) / 6 * 2;
+  $("#bar").style.width = `${Math.round(Math.max(0, i) / (steps.length - 1) * 100)}%`;
+}
+function go(step) { state.step = step; save(); render(); window.scrollTo(0, 0); }
+
+// ---------- screens ----------
+const screens = {
+  consent() {
+    return `<h1>ขอบคุณที่ช่วยทดสอบ CineMeter</h1>
+      <p>CineMeter เป็นเว็บที่รวมคะแนนหนังจากนักวิจารณ์และคนดูไว้ในที่เดียว เราอยากรู้ว่าเว็บช่วยให้ตัดสินใจเลือกหนังเร็วขึ้นจริงไหม ใช้เวลาประมาณ <b>10–12 นาที</b></p>
+      <h2>ข้อมูลที่เก็บ (PDPA)</h2>
+      <ul>
+        <li>เวลาที่ใช้ คำตอบ คะแนนความพึงพอใจ และความเห็นที่คุณพิมพ์</li>
+        <li><b>ไม่เก็บชื่อ อีเมล หรือเบอร์โทร</b> ใช้รหัส P1–P10 ที่ผู้วิจัยให้แทน</li>
+        <li>ใช้เพื่อรายงานรายวิชาเท่านั้น และลบข้อมูลดิบหลังส่งงาน</li>
+        <li>หยุดทำเมื่อไรก็ได้ ข้อมูลจะไม่ถูกส่งจนกว่าคุณกดส่งเองตอนจบ</li>
+      </ul>
+      <label class="opt"><input type="checkbox" id="agree"><span>ฉันอ่านแล้วและยินยอมให้ใช้ข้อมูลข้างต้น</span></label>
+      <div class="actions"><button class="primary" id="next" disabled>ถัดไป</button></div>`;
+  },
+  screen() {
+    return `<h1>คำถามคัดกรอง</h1>
+      <p>1. คุณอายุ 18 ปีขึ้นไปใช่ไหม</p>${radio("age", "yes", "ใช่")}${radio("age", "no", "ไม่ใช่")}
+      <p>2. คุณดูรีวิวหรือคะแนนก่อนเลือกหนังอย่างน้อยเดือนละครั้งไหม</p>${radio("review", "yes", "ใช่")}${radio("review", "no", "ไม่ใช่")}
+      <p class="err" id="err"></p>
+      <div class="actions"><button class="primary" id="next">ถัดไป</button></div>`;
+  },
+  ineligible() {
+    return `<h1>ขอบคุณมากครับ</h1><p>การทดสอบนี้ต้องการผู้ที่อายุ 18 ปีขึ้นไปและดูรีวิวก่อนเลือกหนังเป็นประจำ คุณไม่ต้องทำต่อ และไม่มีข้อมูลใดถูกเก็บ</p>`;
+  },
+  code() {
+    return `<h1>รหัสผู้ทดลอง</h1>
+      <p>ใส่รหัสที่ผู้วิจัยให้คุณ เช่น <b>P3</b></p>
+      <input type="text" id="code" placeholder="P1" autocomplete="off" value="${esc(state.code)}">
+      <p class="err" id="err"></p>
+      <div class="actions"><button class="primary" id="next">ถัดไป</button></div>`;
+  },
+  intro() {
+    const [m1, m2] = state.plan.order;
+    return `<h1>วิธีทดสอบ</h1>
+      <p>คุณจะดูหนัง 4 เรื่อง แบ่งเป็น 2 ช่วง ช่วงละ 2 เรื่อง</p>
+      <ul><li>ช่วงที่ 1: <b>${METHOD[m1].name}</b></li><li>ช่วงที่ 2: <b>${METHOD[m2].name}</b></li></ul>
+      <p>แต่ละเรื่องให้กด <b>เริ่มจับเวลา</b> แล้วหาคำตอบ 2 ข้อ:</p>
+      <ul>
+        <li><b>(ก)</b> ฝั่งไหนคะแนนเกาะกลุ่มกว่า คือแหล่งคะแนนในฝั่งนั้นให้คะแนนใกล้กันกว่า
+          <div class="muted">ฝั่งนักวิจารณ์ = Rotten Tomatoes (Tomatometer) กับ Metacritic (Metascore) · ฝั่งคนดู = IMDb กับ TMDB · เทียบเป็นคะแนนเต็ม 10 เช่น 56% = 5.6</div></li>
+        <li><b>(ข)</b> จากข้อมูลที่เห็น คุณจะดูเรื่องนี้ไหม</li>
+      </ul>
+      <div class="note">ทำตามปกติ ไม่ต้องรีบ และไม่มีถูกหรือผิดที่เป็นคะแนนของคุณ เราวัดว่าเว็บช่วยได้แค่ไหน</div>
+      <div class="actions"><button class="primary" id="next">เริ่มช่วงที่ 1</button></div>`;
+  },
+  task() {
+    const method = state.plan.order[state.block];
+    const set = state.plan.setFor[method];
+    const f = SETS[set][state.film];
+    const q = encodeURIComponent(f.title);
+    const head = `<span class="badge">ช่วงที่ ${state.block + 1} · ${METHOD[method].short} · เรื่องที่ ${state.film + 1}/2</span>
+      <p class="film">${esc(f.title)} <span class="muted">(${f.year})</span></p>`;
+    if (!state.startedAt) {
+      return `${head}<p>${method === "A"
+        ? "ใช้เว็บรีวิว 4 เว็บ (มีลิงก์ค้นหาให้หลังกดเริ่ม) ห้ามใช้ CineMeter ในช่วงนี้"
+        : "ใช้ CineMeter อย่างเดียว พิมพ์ชื่อเรื่องในช่องค้นหาของเว็บ"}</p>
+        <div class="actions"><button class="primary" id="start">เริ่มจับเวลา</button></div>`;
+    }
+    const links = method === "A"
+      ? `<div class="links">
+          <a target="_blank" rel="noopener" href="https://www.rottentomatoes.com/search?search=${q}">Rotten Tomatoes ↗</a>
+          <a target="_blank" rel="noopener" href="https://www.metacritic.com/search/${q}/">Metacritic ↗</a>
+          <a target="_blank" rel="noopener" href="https://www.imdb.com/find/?q=${q}">IMDb ↗</a>
+          <a target="_blank" rel="noopener" href="https://www.themoviedb.org/search?query=${q}">TMDB ↗</a></div>`
+      : `<a class="big" target="_blank" rel="noopener" href="${CINEMETER_URL}">เปิด CineMeter ↗</a>`;
+    return `${head}<p class="timer">กำลังจับเวลา <span id="clock">0:00</span></p>${links}
+      <p><b>(ก)</b> ฝั่งไหนคะแนนเกาะกลุ่มกว่า</p>
+      ${radio("side", "critics", "นักวิจารณ์")}${radio("side", "audience", "คนดู")}${radio("side", "unsure", "บอกไม่ได้")}
+      <p><b>(ข)</b> คุณจะดูเรื่องนี้ไหม</p>${radio("watch", "yes", "ดู")}${radio("watch", "no", "ไม่ดู")}
+      <p>เปิดไปกี่เว็บ (รวมทุกแท็บที่เปิดหาข้อมูลเรื่องนี้)</p>
+      <input type="number" id="sites" min="0" max="30" inputmode="numeric">
+      <p class="err" id="err"></p>
+      <div class="actions"><button class="primary" id="next">ส่งคำตอบ (หยุดเวลา)</button></div>`;
+  },
+  rate() {
+    const method = state.plan.order[state.block];
+    return `<h1>ช่วงที่ ${state.block + 1} เสร็จแล้ว</h1>
+      <p>สำหรับ <b>${METHOD[method].name}</b></p>
+      <p>คุณมั่นใจในคำตอบแค่ไหน</p>${scale("conf", "ไม่มั่นใจเลย", "มั่นใจมาก")}
+      <p>ใช้งานง่ายแค่ไหน</p>${scale("ease", "ยากมาก", "ง่ายมาก")}
+      <p class="err" id="err"></p>
+      <div class="actions"><button class="primary" id="next">${state.block === 0 ? "เริ่มช่วงที่ 2" : "ถัดไป"}</button></div>`;
+  },
+  foryou() {
+    return `<h1>แถว For you</h1>
+      <ol>
+        <li>เปิด CineMeter แล้วค้นหนัง <b>3 เรื่องที่คุณชอบจริง</b> เปิดหน้ารายละเอียดแล้วกด <b>♡ ชอบเรื่องนี้</b></li>
+        <li>กลับหน้าแรก ดูแถว <b>For you</b> ด้านบน</li>
+      </ol>
+      <a class="big" target="_blank" rel="noopener" href="${CINEMETER_URL}">เปิด CineMeter ↗</a>
+      <p>แถว For you ตรงใจคุณแค่ไหน</p>${scale("fy", "ไม่ตรงเลย", "ตรงมาก")}
+      <p>ใน 6 เรื่องแรกของแถว มีกี่เรื่องที่คุณอยากดู</p>
+      <div class="scale" style="grid-template-columns:repeat(7,1fr)">${[0, 1, 2, 3, 4, 5, 6].map(v => `<label><input type="radio" name="fyCount" value="${v}">${v}</label>`).join("")}</div>
+      <label class="opt" style="margin-top:12px"><input type="checkbox" id="fySkip"><span>ทำส่วนนี้ไม่ได้ (เช่น แถวไม่ขึ้น)</span></label>
+      <p class="err" id="err"></p>
+      <div class="actions"><button class="primary" id="next">ถัดไป</button></div>`;
+  },
+  notes() {
+    return `<h1>ความเห็นเพิ่มเติม (ไม่บังคับ)</h1>
+      <p>ชอบอะไรใน CineMeter</p><textarea id="like"></textarea>
+      <p>ตรงไหนงงหรือใช้ยาก</p><textarea id="confusing"></textarea>
+      <p>อยากให้เพิ่มอะไร</p><textarea id="wish"></textarea>
+      <div class="actions"><button class="primary" id="next">เสร็จสิ้น</button></div>`;
+  },
+  done() {
+    const text = JSON.stringify(result());
+    return `<h1>เสร็จแล้ว ขอบคุณมากครับ 🎬</h1>
+      <p>ขั้นสุดท้าย: <b>ส่งผลให้ผู้วิจัย</b> ${FORM_URL ? "กดคัดลอกผล แล้วเปิดฟอร์มและวางในช่องคำตอบ" : "กดคัดลอกผล แล้วส่งข้อความนี้ให้ผู้วิจัย (เช่น ทาง LINE)"}</p>
+      <pre id="resultText">${esc(text)}</pre>
+      <p class="muted" id="copied"></p>
+      <div class="actions">
+        <button class="ghost" id="copy">คัดลอกผล</button>
+        ${FORM_URL ? `<a class="big" style="border-radius:999px;padding:10px 22px;background:var(--accent);color:#0a192f;font-weight:600" target="_blank" rel="noopener" href="${esc(FORM_URL)}">เปิดฟอร์มส่งผล ↗</a>` : ""}
+      </div>`;
+  }
+};
+
+// ---------- actions ----------
+let clockTimer = null;
+function bind() {
+  const next = $("#next"), err = $("#err");
+  const fail = msg => { if (err) err.textContent = msg; };
+  switch (state.step) {
+    case "consent":
+      $("#agree").onchange = e => { next.disabled = !e.target.checked; };
+      next.onclick = () => go("screen");
+      break;
+    case "screen":
+      next.onclick = () => {
+        const age = picked("age"), review = picked("review");
+        if (!age || !review) return fail("กรุณาตอบทั้ง 2 ข้อ");
+        go(age === "yes" && review === "yes" ? "code" : "ineligible");
+      };
+      break;
+    case "code":
+      next.onclick = () => {
+        const code = $("#code").value.trim().toUpperCase();
+        if (!validCode(code)) return fail("รหัสต้องเป็นตัว P ตามด้วยตัวเลข เช่น P3");
+        state.code = code;
+        state.plan = planFor(code);
+        go("intro");
+      };
+      break;
+    case "intro":
+      next.onclick = () => { state.block = 0; state.film = 0; state.startedAt = null; go("task"); };
+      break;
+    case "task": {
+      const start = $("#start");
+      if (start) { start.onclick = () => { state.startedAt = Date.now(); save(); render(); }; break; }
+      const clock = $("#clock");
+      const tick = () => { const s = Math.floor((Date.now() - state.startedAt) / 1000); clock.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+      tick(); clockTimer = setInterval(tick, 1000);
+      next.onclick = () => {
+        const side = picked("side"), watch = picked("watch"), sites = parseInt($("#sites").value, 10);
+        if (!side || !watch) return fail("กรุณาตอบข้อ (ก) และ (ข)");
+        if (!(sites >= 0 && sites <= 30)) return fail("กรุณาใส่จำนวนเว็บที่เปิด (0–30)");
+        const method = state.plan.order[state.block], set = state.plan.setFor[method], f = SETS[set][state.film];
+        const sec = Math.max(1, Math.round((Date.now() - state.startedAt) / 1000));
+        state.tasks = state.tasks.filter(t => !(t.id === f.id && t.method === method));
+        state.tasks.push({ id: f.id, method, set, sec, side, correct: side === f.answer, watch: watch === "yes", sites });
+        state.startedAt = null;
+        if (state.film === 0) { state.film = 1; go("task"); } else go("rate");
+      };
+      break;
+    }
+    case "rate":
+      next.onclick = () => {
+        const conf = picked("conf"), ease = picked("ease");
+        if (!conf || !ease) return fail("กรุณาให้คะแนนทั้ง 2 ข้อ");
+        state.ratings[state.plan.order[state.block]] = { conf: +conf, ease: +ease };
+        if (state.block === 0) { state.block = 1; state.film = 0; go("task"); } else go("foryou");
+      };
+      break;
+    case "foryou":
+      next.onclick = () => {
+        if ($("#fySkip").checked) { state.foryou = { skipped: true }; return go("notes"); }
+        const fy = picked("fy"), fyCount = picked("fyCount");
+        if (!fy || fyCount === null) return fail("กรุณาตอบทั้ง 2 ข้อ หรือติ๊กว่าทำส่วนนี้ไม่ได้");
+        state.foryou = { match: +fy, count: +fyCount };
+        go("notes");
+      };
+      break;
+    case "notes":
+      next.onclick = () => {
+        state.notes = { like: $("#like").value.trim(), confusing: $("#confusing").value.trim(), wish: $("#wish").value.trim() };
+        state.finishedAt = new Date().toISOString();
+        go("done");
+      };
+      break;
+    case "done":
+      $("#copy").onclick = async () => {
+        const text = $("#resultText").textContent;
+        try { await navigator.clipboard.writeText(text); $("#copied").textContent = "คัดลอกแล้ว"; }
+        catch (e) {
+          const r = document.createRange(); r.selectNodeContents($("#resultText"));
+          const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+          $("#copied").textContent = "เลือกข้อความให้แล้ว กด Ctrl+C (หรือกดค้างแล้วคัดลอกบนมือถือ)";
+        }
+      };
+      break;
+  }
+}
+
+function render() {
+  clearInterval(clockTimer);
+  $("#screen").innerHTML = screens[state.step]();
+  progress();
+  bind();
+}
+
+$("#resetBtn").onclick = () => {
+  if (!confirm("ล้างความคืบหน้าทั้งหมดในเครื่องนี้ และเริ่มใหม่?")) return;
+  state = blank(); save(); render();
+};
+
+render();
+window.__usertest = { planFor, validCode, SETS, result: () => result(), state: () => state };
+</script>
+</body>
+</html>

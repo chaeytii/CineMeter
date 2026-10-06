@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>User Test Summary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #061121; --card: #0d1b30; --line: #233554; --text: #e6edf7; --muted: #8892b0; --accent: #ff6600; --warn: #fbbf24; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', 'IBM Plex Sans Thai', sans-serif; line-height: 1.6; }
+  main { max-width: 920px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  h2 { font-size: 17px; margin: 28px 0 8px; }
+  .muted { color: var(--muted); font-size: 14px; }
+  textarea { width: 100%; min-height: 160px; background: #08162a; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 12px/1.5 ui-monospace, monospace; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+  button { font: inherit; font-weight: 600; border-radius: 999px; padding: 8px 20px; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: #0a192f; }
+  button.ghost { background: transparent; color: var(--accent); }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; background: var(--card); }
+  tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; }
+  .warn { color: var(--warn); }
+  ul.msgs { padding-left: 20px; font-size: 14px; }
+  .notes td { white-space: normal; min-width: 160px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>สรุปผลทดสอบกับผู้ใช้ (รายงานข้อ 2.3)</h1>
+  <p class="muted">วางผลของผู้ทดลองทุกคน (คัดลอกทั้งคอลัมน์คำตอบจาก Google Sheets หรือข้อความที่ผู้ทดลองส่งมา บรรทัดละคน) ทุกอย่างคำนวณในเบราว์เซอร์นี้ ไม่ส่งข้อมูลไปที่ไหน</p>
+  <textarea id="input" placeholder='{"v":1,"id":"P1",...}'></textarea>
+  <div class="row">
+    <button id="run">คำนวณ</button>
+    <label class="muted"><input type="checkbox" id="dropSlow" checked> ไม่นับเรื่องที่ใช้เกิน 10 นาที</label>
+  </div>
+  <ul class="msgs" id="msgs"></ul>
+  <div id="out"></div>
+</main>
+<script>
+/* หน้าสรุปผลจาก usertest.html — ข้อ (ก) ตรวจกับเฉลยชุดเดียวกัน ไม่เชื่อค่า correct ที่มากับผล */
+const ANSWERS = { tt7069210: "critics", tt0172495: "audience", tt16366836: "critics", tt0114369: "audience" };
+const SLOW_SEC = 600;
+
+const median = xs => {
+  const s = xs.filter(x => Number.isFinite(x)).sort((a, b) => a - b);
+  if (!s.length) return null;
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+const mean = xs => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+const fmt = (x, d = 1) => x === null || x === undefined ? "–" : Number(x).toFixed(d).replace(/\.0+$/, "");
+
+// แยกผลทีละบรรทัด: หา {...} ในบรรทัด (รองรับข้อความที่ Sheets ใส่เครื่องหมายคำพูดครอบ)
+function parseResults(text) {
+  const rows = [], problems = [];
+  text.split(/\r?\n/).forEach((line, i) => {
+    let raw = line.trim();
+    if (!raw) return;
+    // Sheets ครอบข้อความด้วย "..." และเขียน " ข้างในเป็น "" — ถอดเฉพาะบรรทัดที่ถูกครอบ
+    if (raw.length > 1 && raw.startsWith('"') && raw.endsWith('"')) raw = raw.slice(1, -1).replace(/""/g, '"');
+    const a = raw.indexOf("{"), b = raw.lastIndexOf("}");
+    if (a < 0 || b < a) { problems.push(`บรรทัด ${i + 1}: ไม่ใช่ผลการทดสอบ — ข้าม`); return; }
+    const body = raw.slice(a, b + 1);
+    try {
+      const r = JSON.parse(body);
+      if (r.v !== 1 || !r.id || !Array.isArray(r.tasks)) throw new Error("รูปแบบไม่ครบ");
+      rows.push(r);
+    } catch (e) { problems.push(`บรรทัด ${i + 1}: อ่านไม่ได้ (${e.message}) — ข้าม`); }
+  });
+  // รหัสซ้ำ: ใช้อันหลังสุด
+  const byId = new Map();
+  rows.forEach(r => { if (byId.has(r.id)) problems.push(`${r.id} ส่งมามากกว่า 1 ครั้ง — ใช้อันล่าสุด`); byId.set(r.id, r); });
+  return { rows: [...byId.values()].sort((x, y) => parseInt(x.id.slice(1)) - parseInt(y.id.slice(1))), problems };
+}
+
+function summarize(rows, { dropSlow = true } = {}) {
+  const notes = [];
+  const people = rows.map(r => {
+    const per = {};
+    for (const m of ["A", "B"]) {
+      let tasks = r.tasks.filter(t => t.method === m);
+      const slow = tasks.filter(t => t.sec > SLOW_SEC);
+      if (slow.length) notes.push(`${r.id} วิธี ${m}: ${slow.length} เรื่องใช้เกิน 10 นาที${dropSlow ? " (ไม่นับเวลา)" : ""}`);
+      const timed = dropSlow ? tasks.filter(t => t.sec <= SLOW_SEC) : tasks;
+      per[m] = {
+        sec: mean(timed.map(t => t.sec)),
+        sites: mean(tasks.map(t => t.sites).filter(Number.isFinite)),
+        correct: tasks.filter(t => ANSWERS[t.film] === t.side).length,
+        answered: tasks.length,
+        conf: r.ratings?.[m]?.conf ?? null,
+        ease: r.ratings?.[m]?.ease ?? null
+      };
+    }
+    return { id: r.id, order: r.order, setA: r.setA, per, foryou: r.foryou || {}, notes: r.notes || {} };
+  });
+  const col = (m, k) => people.map(p => p.per[m][k]).filter(x => x !== null);
+  const pct = m => {
+    const c = people.reduce((s, p) => s + p.per[m].correct, 0), n = people.reduce((s, p) => s + p.per[m].answered, 0);
+    return n ? c / n * 100 : null;
+  };
+  const tA = median(col("A", "sec")), tB = median(col("B", "sec"));
+  const fy = people.filter(p => !p.foryou.skipped && Number.isFinite(p.foryou.match));
+  return {
+    n: people.length, people, notes,
+    time: { A: tA, B: tB, reduction: tA && tB !== null ? (tA - tB) / tA * 100 : null },
+    sites: { A: median(col("A", "sites")), B: median(col("B", "sites")) },
+    correct: { A: pct("A"), B: pct("B") },
+    conf: { A: median(col("A", "conf")), B: median(col("B", "conf")) },
+    ease: { A: median(col("A", "ease")), B: median(col("B", "ease")) },
+    foryou: { n: fy.length, skipped: people.length - fy.length, match: median(fy.map(p => p.foryou.match)), count: median(fy.map(p => p.foryou.count)) }
+  };
+}
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const diff = (a, b, d = 1, unit = "") => a === null || b === null ? "–" : `${b - a > 0 ? "+" : ""}${fmt(b - a, d)}${unit}`;
+
+function mainRows(s) {
+  return [
+    ["เวลาต่อหนัง 1 เรื่อง (วินาที)", fmt(s.time.A, 0), fmt(s.time.B, 0), s.time.reduction === null ? "–" : `ลดลง ${fmt(s.time.reduction, 1)}%`],
+    ["จำนวนเว็บที่เปิด (ผู้ทดลองตอบเอง)", fmt(s.sites.A), fmt(s.sites.B), diff(s.sites.A, s.sites.B)],
+    ["ตอบข้อ (ก) ถูก", `${fmt(s.correct.A, 0)}%`, `${fmt(s.correct.B, 0)}%`, diff(s.correct.A, s.correct.B, 0, " จุด")],
+    ["ความมั่นใจ (1–5)", fmt(s.conf.A), fmt(s.conf.B), diff(s.conf.A, s.conf.B)],
+    ["ความง่าย (1–5)", fmt(s.ease.A), fmt(s.ease.B), diff(s.ease.A, s.ease.B)]
+  ];
+}
+
+function render(s) {
+  const rows = mainRows(s);
+  const head = [`ตัวชี้วัด (ค่ากลาง, ผู้ทดลอง ${s.n} คน)`, "แบบเดิม (A)", "ใช้ CineMeter (B)", "เปลี่ยนแปลง"];
+  const tsv = [head, ...rows].map(r => r.join("\t")).join("\n");
+  document.getElementById("out").innerHTML = `
+    <h2>ตารางสำหรับรายงานข้อ 2.3</h2>
+    <div class="table-wrap"><table>
+      <tr>${head.map((h, i) => `<th class="${i ? "num" : ""}">${esc(h)}</th>`).join("")}</tr>
+      ${rows.map(r => `<tr>${r.map((c, i) => `<td class="${i ? "num" : ""}">${esc(c)}</td>`).join("")}</tr>`).join("")}
+    </table></div>
+    <div class="row"><button class="ghost" id="copyTsv">คัดลอกตาราง (วางใน Sheets/Docs ได้)</button><span class="muted" id="copied"></span></div>
+    <h2>แถว For you</h2>
+    <p>ตรงใจ (1–5): <b>${fmt(s.foryou.match)}</b> · อยากดูใน 6 เรื่องแรก: <b>${fmt(s.foryou.count)}</b> เรื่อง <span class="muted">(ค่ากลาง จาก ${s.foryou.n} คน${s.foryou.skipped ? `, ทำส่วนนี้ไม่ได้ ${s.foryou.skipped} คน` : ""})</span></p>
+    <h2>รายคน</h2>
+    <div class="table-wrap"><table>
+      <tr><th>รหัส</th><th>ลำดับ</th><th>ชุดกับ A</th><th class="num">เวลา A</th><th class="num">เวลา B</th><th class="num">(ก) ถูก A</th><th class="num">(ก) ถูก B</th><th class="num">มั่นใจ A/B</th><th class="num">ง่าย A/B</th><th class="num">For you</th></tr>
+      ${s.people.map(p => `<tr><td>${esc(p.id)}</td><td>${esc(p.order)}</td><td>${esc(p.setA)}</td>
+        <td class="num">${fmt(p.per.A.sec, 0)}</td><td class="num">${fmt(p.per.B.sec, 0)}</td>
+        <td class="num">${p.per.A.correct}/${p.per.A.answered}</td><td class="num">${p.per.B.correct}/${p.per.B.answered}</td>
+        <td class="num">${fmt(p.per.A.conf)}/${fmt(p.per.B.conf)}</td><td class="num">${fmt(p.per.A.ease)}/${fmt(p.per.B.ease)}</td>
+        <td class="num">${p.foryou.skipped ? "ข้าม" : `${fmt(p.foryou.match)} · ${fmt(p.foryou.count)}/6`}</td></tr>`).join("")}
+    </table></div>
+    <h2>ความเห็น</h2>
+    <div class="table-wrap"><table class="notes">
+      <tr><th>รหัส</th><th>ชอบ</th><th>งง / ใช้ยาก</th><th>อยากให้เพิ่ม</th></tr>
+      ${s.people.map(p => `<tr><td>${esc(p.id)}</td><td>${esc(p.notes.like)}</td><td>${esc(p.notes.confusing)}</td><td>${esc(p.notes.wish)}</td></tr>`).join("")}
+    </table></div>
+    <p class="muted">เวลาต่อหนัง = ค่ากลางของ "เวลาเฉลี่ยต่อเรื่องของแต่ละคน" · % เวลาที่ลดลง = (A − B) ÷ A × 100 · ข้อ (ก) ตรวจกับเฉลยจากค่า S.D. จริงในฐานข้อมูล</p>`;
+  document.getElementById("copyTsv").onclick = async () => {
+    try { await navigator.clipboard.writeText(tsv); document.getElementById("copied").textContent = "คัดลอกแล้ว"; }
+    catch (e) { document.getElementById("copied").textContent = "คัดลอกไม่ได้ ลองเลือกตารางแล้วกด Ctrl+C"; }
+  };
+}
+
+document.getElementById("run").onclick = () => {
+  const { rows, problems } = parseResults(document.getElementById("input").value);
+  const msgs = document.getElementById("msgs");
+  if (!rows.length) { msgs.innerHTML = `<li class="warn">ไม่พบผลที่อ่านได้</li>`; document.getElementById("out").innerHTML = ""; return; }
+  const s = summarize(rows, { dropSlow: document.getElementById("dropSlow").checked });
+  const all = [...problems, ...s.notes];
+  if (rows.length < 10) all.push(`มีผล ${rows.length} คน (แผนในรายงานคือ 10 คนขึ้นไป)`);
+  msgs.innerHTML = all.map(m => `<li class="warn">${esc(m)}</li>`).join("");
+  render(s);
+};
+window.__summary = { parseResults, summarize, median, mainRows };
+</script>
+</body>
+</html>
