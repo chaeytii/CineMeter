@@ -129,3 +129,38 @@ test("[BL-PL-06] (edge) ยังไม่ได้ deploy index ภาษา �
   assert.equal(app.getLanguage({ Language: " TH " }), "th");
   assert.equal(app.getLanguage({}), "");
 });
+
+test("[BL-PL-07] เมล็ดของ For you = 3 เรื่องล่าสุดที่ชอบ + สุ่ม 2 เรื่องจากที่ชอบก่อนหน้า ไม่ซ้ำกัน สุ่มครั้งเดียวจนกว่ารายการจะเปลี่ยน", () => {
+  h.set("olderPick", { key: "", ids: [] });
+  const liked = ["n1", "n2", "n3", "o1", "o2", "o3", "o4"];
+  const seq = [0.99, 0.0];
+  const picked = app.pickOlderLikes(liked, () => seq.shift());
+  assert.deepEqual(picked, ["o4", "o1"]);
+  assert.deepEqual(app.pickOlderLikes(liked, () => 0.5), ["o4", "o1"], "รายการเดิม ใช้ผลสุ่มเดิม");
+  const again = app.pickOlderLikes(["n0", ...liked], () => 0);
+  assert.deepEqual(again, ["n3", "o1"], "กดชอบเรื่องใหม่ -> สุ่มใหม่จากเรื่องที่เก่ากว่า 3 เรื่องล่าสุด");
+  assert.deepEqual(app.pickOlderLikes(["a", "b", "c"]), [], "ชอบไม่เกิน 3 เรื่อง -> ไม่มีเรื่องเก่าให้สุ่ม");
+  assert.deepEqual(app.pickOlderLikes(["a", "b", "c", "d"]), ["d"]);
+
+  localStorage.clear();
+  localStorage.setItem(app.TASTE_KEY, JSON.stringify({ genres: { "บู๊": 9 }, seen: [], liked }));
+  const seeds = app.forYouRow().seeds;
+  assert.deepEqual(seeds.slice(0, 3), ["n1", "n2", "n3"]);
+  assert.equal(seeds.length, 5);
+  assert.equal(new Set(seeds).size, 5);
+  assert.ok(seeds.slice(3).every(id => liked.slice(3).includes(id)));
+});
+
+test("[BL-PL-08] กดชอบ Iron Man ไว้ก่อน แล้วกดชอบซีรีส์ BL 3 เรื่อง → For you ยังมีหนังแนว Iron Man ปนกับซีรีส์ BL", async () => {
+  localStorage.clear(); resetDom();
+  const base = makeMovies(1200, 11).map(r => ({ ...r, Poster: r.Poster || `https://img.example/${r.id}.jpg` }));
+  await useDb([...base, ironMan, ...studio, ...thaiBL, ...famousDrama]);
+  app.rowState.clear(); app.homePending?.clear(); app.similarCache?.clear();
+  h.set("olderPick", { key: "", ids: [] });
+  app.toggleLike(ironMan);
+  for (const m of thaiBL.slice(0, 3)) app.toggleLike(m);
+  assert.deepEqual(app.forYouRow().seeds, [thaiBL[2].id, thaiBL[1].id, thaiBL[0].id, ironMan.id]);
+  const shown = await loadRow("foryou");
+  assert.ok(thaiBL.slice(3).some(m => shown.includes(m.Title_EN)), shown.join(", "));
+  assert.ok(studio.some(m => shown.includes(m.Title_EN)), shown.join(", "));
+});
