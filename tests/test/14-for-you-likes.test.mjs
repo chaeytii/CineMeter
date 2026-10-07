@@ -188,17 +188,60 @@ test("[BL-PL-10] rankForYou: ความคล้ายเท่ากัน �
   assert.deepEqual(app.rankForYou([seed], [[low, high]], [], 2).map(m => m.id), ["high", "low"]);
 });
 
-test("[BL-PL-11] (edge) rankForYou: เรื่องที่ชอบเรื่องเดียวได้ไม่เกินครึ่งแถว ส่วนเกินต่อท้ายเมื่อแถวไม่เต็ม, ข้ามเรื่องที่เคยเปิด/ไม่มีโปสเตอร์", () => {
+test("[BL-PL-11] (edge) rankForYou: เรื่องที่ชอบแนวหนึ่งคะแนนสูงกว่ามาก อีกแนวยังได้ช่องต้นแถว; แถวไม่เต็ม → ได้ครบ, ข้ามเรื่องที่เคยเปิด/ไม่มีโปสเตอร์", () => {
   const seedA = kwFilm("sa", ["zombie", "virus", "city"]);
   const seedB = kwFilm("sb", ["chef", "food", "paris"]);
-  const zs = Array.from({ length: 6 }, (_, i) => kwFilm(`z${i}`, ["zombie", "virus", "city"]));
-  const fs = Array.from({ length: 2 }, (_, i) => kwFilm(`f${i}`, ["chef"]));
+  const zs = Array.from({ length: 6 }, (_, i) => kwFilm(`z${i}`, ["zombie", "virus", "city"], { Audience_Average: 9 }));
+  const fs = Array.from({ length: 2 }, (_, i) => kwFilm(`f${i}`, ["chef"], { Audience_Average: 5 }));
   const out = app.rankForYou([seedA, seedB], [zs, fs], [], 4).map(m => m.id);
-  assert.equal(out.filter(id => id.startsWith("z")).length, 2, out.join(", "));
-  assert.equal(out.filter(id => id.startsWith("f")).length, 2, out.join(", "));
+  assert.ok(out.some(id => id.startsWith("f")), out.join(", "));
+  assert.equal(out[0][0], "z", "เรื่องที่ตรงกว่ายังขึ้นก่อน");
   const all = app.rankForYou([seedA, seedB], [zs, fs], ["z0"], 20).map(m => m.id);
-  assert.equal(all.length, 7, "แถวไม่เต็ม → เติมส่วนเกินจนหมด (ข้าม z0 ที่เคยเปิด)");
+  assert.equal(all.length, 7, "แถวไม่เต็ม → ได้ทุกเรื่อง (ข้าม z0 ที่เคยเปิด)");
   assert.ok(!all.includes("z0"));
   assert.deepEqual(app.rankForYou([seedA], [[{ ...zs[1], Poster: "" }]], [], 5), []);
   assert.deepEqual(app.rankForYou([], [], [], 5), []);
+});
+
+test("[BL-PL-12] keyword ที่เกือบทุกเรื่องมี (เช่น anime) นับน้อยกว่าคำเฉพาะ → หนังที่ตรงคำเฉพาะขึ้นก่อน", () => {
+  const seed = kwFilm("dora", ["anime", "time travel", "gadget"]);
+  const shonen = Array.from({ length: 8 }, (_, i) => kwFilm(`sh${i}`, ["anime", "ninja", "sword"], { Audience_Average: 8.5 }));
+  const timeTravel = kwFilm("tt", ["time travel", "family"], { Audience_Average: 7 });
+  const w = app.keywordWeights([...shonen, timeTravel, seed]);
+  assert.ok(w("anime") < 0.1, String(w("anime")));
+  assert.ok(w("time travel") > 5 * w("anime") && w("time travel") <= 1, String(w("time travel")));
+  assert.ok(w("never seen") > w("time travel"), "คำที่ไม่มีในกอง = หายากที่สุด");
+  assert.equal(app.rankForYou([seed], [[...shonen, timeTravel]], [], 3)[0].id, "tt");
+  assert.equal(app.keywordOverlap(seed, shonen[0]), app.keywordOverlap(seed, timeTravel), "แบบเดิมนับ anime เท่ากับ time travel");
+  assert.ok(app.weightedKeywordOverlap(seed, timeTravel, w) > 5 * app.weightedKeywordOverlap(seed, shonen[0], w));
+  assert.equal(app.forYouScore(seed, timeTravel), app.forYouScore(seed, shonen[0]), "ไม่ส่ง weight = คะแนนแบบเดิม (similarToLiked ไม่เปลี่ยน)");
+});
+
+test("[BL-PL-13] ชอบ 3 แนวต่างกัน → 6 ช่องแรกมีครบทั้ง 3 แนว แม้แนวหนึ่งคะแนนสูงกว่ามาก", () => {
+  const seeds = [kwFilm("s1", ["robot", "space"]), kwFilm("s2", ["ghost", "curse"]), kwFilm("s3", ["greek", "voyage"])];
+  const strong = Array.from({ length: 10 }, (_, i) => kwFilm(`a${i}`, ["robot", "space"], { Audience_Average: 9 }));
+  const ghost = Array.from({ length: 5 }, (_, i) => kwFilm(`g${i}`, ["ghost"], { Audience_Average: 6 }));
+  const myth = Array.from({ length: 5 }, (_, i) => kwFilm(`m${i}`, ["voyage"], { Audience_Average: 6 }));
+  const first6 = app.rankForYou(seeds, [strong, ghost, myth], [], 18).slice(0, 6).map(m => m.id[0]);
+  assert.deepEqual([...new Set(first6)].sort(), ["a", "g", "m"], first6.join(""));
+});
+
+test("[BL-PL-14] (edge) ภาคเดียวกันขึ้นเรื่องเดียว: ชื่อหลักเดียวกัน หรือ CollectionID เดียวกัน; ชื่อสั้นไม่ถึง 4 ตัวอักษรไม่นับ; แถวไม่เต็ม → ภาคที่ซ้ำต่อท้าย", () => {
+  const t = (title, extra = {}) => ({ Title_EN: title, CollectionID: 0, ...extra });
+  assert.ok(app.sameFranchise(t("Naruto"), t("Naruto: Shippuden")));
+  assert.ok(app.sameFranchise(t("Bleach: Thousand-Year Blood War"), t("Bleach")));
+  assert.ok(app.sameFranchise(t("Hunter x Hunter"), t("Hunter x Hunter")));
+  assert.ok(app.sameFranchise(t("Spider-Man"), t("Spider-Man: No Way Home")));
+  assert.ok(app.sameFranchise(t("Alien", { CollectionID: 8091 }), t("Prometheus", { CollectionID: 8091 })));
+  assert.ok(!app.sameFranchise(t("It"), t("It Follows")), "ชื่อสั้นเกินไป");
+  assert.ok(!app.sameFranchise(t("The Odyssey"), t("The Office")));
+  assert.ok(!app.sameFranchise(t("Naruto"), t("Narutopia")));
+  assert.equal(app.titleRoot(t("Bleach: Thousand-Year Blood War")), "bleach");
+
+  const seed = kwFilm("s", ["ninja", "shinobi"]);
+  const naruto = kwFilm("n1", ["ninja", "shinobi"], { Title_EN: "Naruto", Audience_Average: 9 });
+  const shippuden = kwFilm("n2", ["ninja", "shinobi"], { Title_EN: "Naruto: Shippuden", Audience_Average: 8.9 });
+  const other = kwFilm("o1", ["ninja"], { Title_EN: "Ninja Scroll", Audience_Average: 6 });
+  assert.deepEqual(app.rankForYou([seed], [[naruto, shippuden, other]], [], 2).map(m => m.id), ["n1", "o1"]);
+  assert.deepEqual(app.rankForYou([seed], [[naruto, shippuden, other]], [], 5).map(m => m.id), ["n1", "o1", "n2"]);
 });

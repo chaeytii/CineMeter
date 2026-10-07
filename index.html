@@ -1912,6 +1912,7 @@
          * - เปิดหน้ารายละเอียด 1 ครั้ง = ประเภทของเรื่องนั้นได้ +1, กด ♥ = +3 (กดซ้ำ = ยกเลิก -3)
          * - แถว "For you" บนหน้าแรก = หนังคล้าย 3 เรื่องล่าสุดที่กด ♥ + สุ่มอีก 2 เรื่องจากที่เคยกด ♥ ก่อนหน้า (PERS-02/03/04: keyword + ภาษาเดียวกัน) ขึ้นก่อน
          *   เรียงทั้งแถวด้วยคะแนนรวม: คล้ายหลายเรื่องที่ชอบ + คะแนนคนดู ขึ้นก่อน (PERS-05)
+         *   ทุกเรื่องที่ชอบได้ช่องสลับกัน, keyword ทั่วไป (anime ฯลฯ) นับน้อย, ภาคเดียวกันขึ้นเรื่องเดียว (PERS-06)
  *   แล้วเติมด้วยหนังจากประเภทที่ได้ตั้งแต่ 2 แต้มขึ้นไป 2 อันดับแรก
  *   ไม่ซ้ำเรื่องที่เปิดดูหรือกดชอบแล้ว และโหลดใหม่ทุกครั้งที่ประวัติเปลี่ยน
  * - แถว "Your likes" = เรื่องที่กด ♥ ไว้ ใหม่สุดก่อน (เก็บแค่รหัสหนังในเครื่อง)
@@ -2028,11 +2029,34 @@
         const LANG_POOL = 80;
         function getLanguage(m) { return String(m?.Language ?? m?.language ?? "").trim().toLowerCase(); }
 
-        function forYouScore(seed, cand) {
+        // keyword ที่หลายเรื่องมีเหมือนกัน (เช่น "anime", "based on manga") บอกความคล้ายได้น้อย (PERS-06)
+        // น้ำหนัก = ความหายากในกองตัวเลือก (IDF) 0–1: เกือบทุกเรื่องมี → ใกล้ 0, มีแค่ไม่กี่เรื่อง → ใกล้ 1
+        function keywordWeights(movies) {
+            const df = new Map();
+            movies.forEach(m => new Set(getKeywords(m).map(k => k.toLowerCase())).forEach(k => df.set(k, (df.get(k) || 0) + 1)));
+            const n = movies.length;
+            return k => n < 2 ? 1 : Math.log((n + 1) / ((df.get(k) || 0) + 1)) / Math.log(n + 1);
+        }
+
+        function weightedKeywordOverlap(a, b, weight) {
+            const A = new Set(getKeywords(a).map(s => s.toLowerCase()));
+            if (!A.size) return 0;
+            const B = getKeywords(b).map(s => s.toLowerCase());
+            if (!B.length) return 0;
+            const hit = B.filter(k => A.has(k)).reduce((sum, k) => sum + weight(k), 0);
+            return hit / Math.max(3, Math.min(A.size, B.length));
+        }
+
+        const FAMILY_GENRE = "ครอบครัว";
+        function isFamily(m) { return movieGenres(m).includes(FAMILY_GENRE); }
+
+        // weight (ไม่บังคับ) = น้ำหนัก keyword จาก keywordWeights — ใช้ตอนเรียงแถว For you (มีกลุ่มผู้ชมครอบครัว/ทั่วไปตรงกันด้วย)
+        function forYouScore(seed, cand, weight) {
             const lang = getLanguage(seed);
-            return keywordOverlap(seed, cand) * 3
+            return (weight ? weightedKeywordOverlap(seed, cand, weight) : keywordOverlap(seed, cand)) * 3
                  + (lang && lang === getLanguage(cand) ? 1.2 : 0)
                  + (isSeries(seed) === isSeries(cand) ? 0.6 : 0)
+                 + (weight && isFamily(seed) === isFamily(cand) ? 0.6 : 0)
                  + genreOverlap(seed, cand) * 0.6
                  + companyOverlap(seed, cand) * 0.5
                  + eraCloseness(seed, cand) * 0.4
@@ -2069,24 +2093,41 @@
             return similarCache.get(seed.id);
         }
 
-        // เรียงหนังคล้ายเรื่องที่ชอบรวมเป็นแถวเดียว (PERS-05) แทนการหยิบสลับทีละเรื่องที่ชอบ:
-        // วัดแต่ละเรื่องกับทุกเรื่องที่ชอบ (คล้ายหลายเรื่อง = ขึ้นก่อน, คะแนนรวมแบบลดหลั่น s1 + s2/2 + s3/4 ...) + คะแนนคนดูเล็กน้อย
-        // เรื่องที่ชอบเรื่องเดียวกินช่องได้ไม่เกินครึ่งแถว ส่วนเกินต่อท้ายเมื่อแถวยังไม่เต็ม
-        const FOR_YOU_SEED_CAP = 0.5;
+        // เรียงหนังคล้ายเรื่องที่ชอบรวมเป็นแถวเดียว (PERS-05/06):
+        // คะแนน = วัดกับทุกเรื่องที่ชอบ (s1 + s2/2 + s3/4 ...) + คะแนนคนดูเล็กน้อย
+        // เลือกทีละช่อง: เรื่องที่ชอบเรื่องไหนได้ช่องไปแล้ว หนังจากเรื่องนั้นลดคะแนนช่องละ 0.5 → ทุกแนวที่ชอบสลับกันทั้งแถว
+        // ภาคเดียวกัน (Naruto / Naruto: Shippuden) ขึ้นแค่เรื่องเดียว ภาคที่เหลือต่อท้ายเมื่อแถวยังไม่เต็ม
+        const FOR_YOU_SAME_SEED = 0.5;
+        function titleRoot(m) {
+            return String(m.Title_EN || m.Title || "").toLowerCase().split(/[:(–]| - /)[0]
+                .replace(/[^a-z0-9\u0E00-\u0E7F ]+/g, " ").replace(/\s+/g, " ").trim();
+        }
+        function sameFranchise(a, b) {
+            if (sameCollection(a, b)) return true;
+            const x = titleRoot(a), y = titleRoot(b);
+            const [s, l] = x.length <= y.length ? [x, y] : [y, x];
+            return s.length >= 4 && (l === s || l.startsWith(s + " "));
+        }
         function rankForYou(seeds, lists, seen, size) {
             const skip = new Set(seen), pool = new Map();
             lists.forEach(list => (list || []).forEach(m => {
                 if (m && m.Poster && !skip.has(m.id) && !pool.has(m.id)) pool.set(m.id, m);
             }));
-            const scored = [...pool.values()].map(m => {
-                const s = seeds.map((seed, i) => ({ i, v: forYouScore(seed, m) })).sort((a, b) => b.v - a.v);
+            const weight = keywordWeights([...pool.values(), ...seeds]);
+            const left = [...pool.values()].map(m => {
+                const s = seeds.map((seed, i) => ({ i, v: forYouScore(seed, m, weight) })).sort((a, b) => b.v - a.v);
                 const quality = Math.max(0, toNum(m.Audience_Average) - 5) * 0.2;
                 return { m, from: s.length ? s[0].i : -1, score: s.reduce((sum, x, k) => sum + x.v / 2 ** k, 0) + quality };
             }).sort((a, b) => b.score - a.score);
-            const cap = Math.ceil(size * FOR_YOU_SEED_CAP), used = new Map(), out = [], extra = [];
-            for (const x of scored) {
-                const n = used.get(x.from) || 0;
-                if (n < cap) { used.set(x.from, n + 1); out.push(x.m); } else extra.push(x.m);
+            const used = new Map(), out = [], extra = [];
+            while (out.length < size && left.length) {
+                const value = x => x.score - FOR_YOU_SAME_SEED * (used.get(x.from) || 0);
+                let best = 0;
+                for (let j = 1; j < left.length; j++) if (value(left[j]) > value(left[best])) best = j;
+                const [x] = left.splice(best, 1);
+                if (out.some(m => sameFranchise(m, x.m))) { extra.push(x.m); continue; }
+                used.set(x.from, (used.get(x.from) || 0) + 1);
+                out.push(x.m);
             }
             return out.concat(extra).slice(0, size);
         }

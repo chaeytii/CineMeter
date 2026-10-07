@@ -47,7 +47,7 @@ const NAMES = [
   // hero
   "readStore", "writeStore", "isHeroCandidate", "buildHeroPool", "shuffled", "pickHero",
   // personalized (PERS-01, v7_9 เท่านั้น)
-  "?TASTE_KEY", "?TASTE", "?readTaste", "?addGenreScore", "?recordTaste", "?toggleLike", "?topGenres", "?mixForYou", "?forYouRow", "?FOR_YOU_SEEDS", "?FOR_YOU_OLDER", "?olderPick", "?pickOlderLikes", "?likedRow", "?loadMoviesByIds", "?LANG_POOL", "?getLanguage", "?forYouScore", "?loadSameLanguage", "?similarCache", "?similarToLiked", "?FOR_YOU_SEED_CAP", "?rankForYou",
+  "?TASTE_KEY", "?TASTE", "?readTaste", "?addGenreScore", "?recordTaste", "?toggleLike", "?topGenres", "?mixForYou", "?forYouRow", "?FOR_YOU_SEEDS", "?FOR_YOU_OLDER", "?olderPick", "?pickOlderLikes", "?likedRow", "?loadMoviesByIds", "?LANG_POOL", "?getLanguage", "?forYouScore", "?loadSameLanguage", "?similarCache", "?similarToLiked", "?rankForYou", "?keywordWeights", "?weightedKeywordOverlap", "?FAMILY_GENRE", "?isFamily", "?FOR_YOU_SAME_SEED", "?titleRoot", "?sameFranchise",
   "rowFilters", "loadHomeRow", "?homeRowsNow", "?FAMILY_CARTOON", "?homeShown", "?homePending", "?familyCartoonOutOfPlace", "?pickRowMovies", "?shownAbove", "?loadHomeRowNow",
   "?FAMILIAR", "?getCollectionId", "?getCompanies", "?sameCollection", "?companyOverlap", "?keepFamiliar", "?sortByRelease", "?loadCollection", "?renderCollectionRow",
   // recommend side
