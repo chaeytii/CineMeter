@@ -81,17 +81,25 @@ const METHOD = {
 };
 const SIDE_TH = { critics: "นักวิจารณ์", audience: "คนดู", unsure: "บอกไม่ได้" };
 
-// ลำดับสลับจากเลขรหัส (counterbalance 4 แบบ): ใครทำ A ก่อน และชุดไหนใช้กับวิธี A
-function planFor(code) {
-  const n = parseInt(String(code).replace(/\D/g, ""), 10);
-  const k = (n - 1) % 4;
+// ลำดับสลับ (counterbalance 4 แบบ): ใครทำ A ก่อน และชุดไหนใช้กับวิธี A
+// รหัส P ที่ผู้วิจัยให้ -> แบบที่ (เลข - 1) % 4 ; รหัสสุ่ม CM-XXXX -> สุ่มแบบครั้งเดียวแล้วจำไว้
+function planFor(code, k = (parseInt(String(code).replace(/\D/g, ""), 10) - 1) % 4) {
   const order = k % 2 === 0 ? ["A", "B"] : ["B", "A"];
   const setForA = k < 2 ? 1 : 2;
   const setFor = { A: setForA, B: setForA === 1 ? 2 : 1 };
   return { order, setFor };
 }
 
-function validCode(code) { return /^P([1-9]\d?)$/i.test(String(code).trim()); }
+function validCode(code) { return /^(P[1-9]\d?|CM-[A-Z2-9]{4})$/i.test(String(code).trim()); }
+
+// รหัสสุ่มไม่ซ้ำ ไม่ใช้ตัวที่สับสนง่าย (0 O 1 I L)
+const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+function randomInts(n, max) {
+  const a = new Uint32Array(n);
+  (window.crypto || window.msCrypto).getRandomValues(a);
+  return [...a].map(x => x % max);
+}
+function newCode() { return "CM-" + randomInts(4, CODE_CHARS.length).map(i => CODE_CHARS[i]).join(""); }
 
 // ---------- state ----------
 function blank() {
@@ -138,7 +146,7 @@ const screens = {
       <h2>ข้อมูลที่เก็บ (PDPA)</h2>
       <ul>
         <li>เวลาที่ใช้ คำตอบ คะแนนความพึงพอใจ และความเห็นที่คุณพิมพ์</li>
-        <li><b>ไม่เก็บชื่อ อีเมล หรือเบอร์โทร</b> ใช้รหัส (เช่น P1, P2, …) ที่ผู้วิจัยให้แทน</li>
+        <li><b>ไม่เก็บชื่อ อีเมล หรือเบอร์โทร</b> ระบบสร้างรหัสสุ่มให้แทน (เช่น CM-7F3K)</li>
         <li>ใช้เพื่อรายงานรายวิชาเท่านั้น และลบข้อมูลดิบหลังส่งงาน</li>
         <li>หยุดทำเมื่อไรก็ได้ ข้อมูลจะไม่ถูกส่งจนกว่าคุณกดส่งเองตอนจบ</li>
       </ul>
@@ -156,9 +164,11 @@ const screens = {
     return `<h1>ขอบคุณมากครับ</h1><p>การทดสอบนี้ต้องการผู้ที่อายุ 18 ปีขึ้นไปและดูรีวิวก่อนเลือกหนังเป็นประจำ คุณไม่ต้องทำต่อ และไม่มีข้อมูลใดถูกเก็บ</p>`;
   },
   code() {
-    return `<h1>รหัสผู้ทดลอง</h1>
-      <p>ใส่รหัสที่ผู้วิจัยให้คุณ เช่น <b>P3</b></p>
-      <input type="text" id="code" placeholder="P1" autocomplete="off" value="${esc(state.code)}">
+    return `<h1>รหัสผู้ทดลองของคุณ</h1>
+      <p style="font-size:28px;font-weight:700;letter-spacing:2px;margin:8px 0">${esc(state.autoCode)}</p>
+      <p class="muted">ระบบสร้างให้อัตโนมัติ ไม่ซ้ำกับคนอื่น ไม่ต้องจำ</p>
+      <p>มีรหัสจากผู้วิจัย (เช่น P3) ไหม? ถ้าไม่มี ปล่อยว่างไว้</p>
+      <input type="text" id="code" placeholder="ไม่บังคับ" autocomplete="off" value="${esc(/^P/i.test(state.code) ? state.code : "")}">
       <p class="err" id="err"></p>
       <div class="actions"><button class="primary" id="next">ถัดไป</button></div>`;
   },
@@ -238,6 +248,7 @@ const screens = {
   done() {
     const text = JSON.stringify(result());
     return `<h1>เสร็จแล้ว ขอบคุณมากครับ 🎬</h1>
+      <p class="muted">รหัสของคุณ: <b>${esc(state.code)}</b></p>
       <p>ขั้นสุดท้าย: <b>ส่งผลให้ผู้วิจัย</b> ${FORM_URL ? "กดคัดลอกผล แล้วเปิดฟอร์มและวางในช่องคำตอบ" : "กดคัดลอกผล แล้วส่งข้อความนี้ให้ผู้วิจัย (เช่น ทาง LINE)"}</p>
       <pre id="resultText">${esc(text)}</pre>
       <p class="muted" id="copied"></p>
@@ -262,15 +273,17 @@ function bind() {
       next.onclick = () => {
         const age = picked("age"), review = picked("review");
         if (!age || !review) return fail("กรุณาตอบทั้ง 2 ข้อ");
-        go(age === "yes" && review === "yes" ? "code" : "ineligible");
+        if (age !== "yes" || review !== "yes") return go("ineligible");
+        if (!state.autoCode) { state.autoCode = newCode(); state.autoK = randomInts(1, 4)[0]; }
+        go("code");
       };
       break;
     case "code":
       next.onclick = () => {
-        const code = $("#code").value.trim().toUpperCase();
-        if (!validCode(code)) return fail("รหัสต้องเป็นตัว P ตามด้วยตัวเลข เช่น P3");
-        state.code = code;
-        state.plan = planFor(code);
+        const typed = $("#code").value.trim().toUpperCase();
+        if (typed && !/^P[1-9]\d?$/.test(typed)) return fail("รหัสจากผู้วิจัยต้องเป็นตัว P ตามด้วยตัวเลข เช่น P3 (หรือปล่อยว่าง)");
+        state.code = typed || state.autoCode;
+        state.plan = typed ? planFor(typed) : planFor(state.code, state.autoK);
         go("intro");
       };
       break;
@@ -349,7 +362,7 @@ $("#resetBtn").onclick = () => {
 };
 
 render();
-window.__usertest = { planFor, validCode, SETS, result: () => result(), state: () => state };
+window.__usertest = { planFor, validCode, newCode, SETS, result: () => result(), state: () => state };
 </script>
 </body>
 </html>
