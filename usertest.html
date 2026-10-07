@@ -39,8 +39,17 @@
   .film { font-size: 20px; font-weight: 700; }
   .badge { display: inline-block; font-size: 12px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
   .links { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 12px 0; }
-  .links a, a.big { display: block; text-align: center; padding: 10px; border-radius: 10px; border: 1px solid var(--line); color: var(--text); text-decoration: none; }
-  .links a:hover, a.big:hover { border-color: var(--accent); }
+  /* ปุ่มลิงก์ต้องดูออกว่ากดได้ (ผู้ทดลองช่วงแรกไม่รู้ว่าปุ่มกรอบเทากดได้) */
+  .links a, a.big { display: block; text-align: center; padding: 12px 10px; border-radius: 10px; border: 2px solid var(--accent); background: rgba(255,102,0,.14); color: #fff; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+  .links a:hover, a.big:hover { background: var(--accent); color: #0a192f; }
+  .tap { font-size: 13px; color: var(--muted); text-align: center; margin: 4px 0 12px; }
+  ol.steps { padding-left: 22px; margin: 8px 0; }
+  ol.steps li { margin: 4px 0; }
+  .what { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 12px 0; background: #0a1a2e; }
+  .what h2 { margin-top: 0; }
+  table.ex { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0; }
+  table.ex th, table.ex td { border: 1px solid var(--line); padding: 6px 8px; text-align: center; }
+  table.ex th { color: var(--muted); font-weight: 500; }
   .timer { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; }
   .note { border-left: 3px solid var(--accent); padding: 8px 12px; background: rgba(255,102,0,.06); border-radius: 0 8px 8px 0; font-size: 14px; }
   .err { color: var(--bad); font-size: 14px; min-height: 1em; }
@@ -81,11 +90,23 @@ const METHOD = {
 };
 // วิธีดูข้อ (ก) ของแต่ละวิธี — ตัวอย่างใช้เลขสมมติ ไม่ตรงกับหนังเรื่องไหนในแบบทดสอบ
 const HOW_TO = {
-  A: `<b>เว็บรีวิว:</b> แปลงคะแนนเป็นเต็ม 10 แล้วดูว่าสองเว็บในฝั่งเดียวกันต่างกันกี่คะแนน ฝั่งที่ต่างกัน<b>น้อยกว่า</b> = เกาะกลุ่มกว่า
-      <ul><li>นักวิจารณ์: Rotten Tomatoes (Tomatometer %) กับ Metacritic (Metascore เต็ม 100) → หาร 10 ทั้งคู่</li>
-      <li>คนดู: IMDb (เต็ม 10) กับ TMDB (User Score %) → TMDB หาร 10</li></ul>
-      ตัวอย่างสมมติ: RT 90% = 9.0 กับ Metacritic 70 = 7.0 ต่างกัน 2.0 · IMDb 7.5 กับ TMDB 72% = 7.2 ต่างกัน 0.3 → <b>คนดู</b>เกาะกลุ่มกว่า`,
-  B: `<b>CineMeter:</b> เปิดหน้ารายละเอียดของเรื่อง แล้วดูช่อง <b>Recommend side</b> ที่บอกว่า "เชื่อฝั่งนักวิจารณ์" หรือ "เชื่อฝั่งคนดู" — ฝั่งนั้นคือฝั่งที่เกาะกลุ่มกว่า (มาจากค่า S.D. ที่น้อยกว่า ดูตัวเลข S.D. ใต้คะแนนแต่ละฝั่งได้)`
+  A: `<b>วิธี A — เปิดเว็บรีวิวเอง</b>
+      <ol class="steps">
+        <li>กดปุ่มเปิดเว็บทีละเว็บ แล้วจดคะแนนของเรื่องนี้ 4 ตัว — <b>นักวิจารณ์:</b> Rotten Tomatoes (ตัวเลข Tomatometer %) และ Metacritic (Metascore เต็ม 100) · <b>คนดู:</b> IMDb (เต็ม 10) และ TMDB (User Score %)</li>
+        <li>ทำให้เป็นเต็ม 10 เหมือนกัน: ตัวที่เป็น % หรือเต็ม 100 ให้หาร 10 (เช่น 90% → 9.0)</li>
+        <li>ลบกันในฝั่งเดียวกัน (เว็บนักวิจารณ์ 2 เว็บ / เว็บคนดู 2 เว็บ) เพื่อดูว่า 2 เว็บนั้นให้คะแนนห่างกันแค่ไหน</li>
+        <li>ฝั่งที่ห่างกัน<b>น้อยกว่า</b> = ฝั่งที่เห็นตรงกันเองมากกว่า → ตอบฝั่งนั้น</li>
+      </ol>
+      <table class="ex"><tr><th>ตัวอย่างสมมติ</th><th>เว็บที่ 1</th><th>เว็บที่ 2</th><th>ห่างกัน</th></tr>
+        <tr><td>นักวิจารณ์</td><td>RT 90% → 9.0</td><td>Metacritic 70 → 7.0</td><td>2.0</td></tr>
+        <tr><td>คนดู</td><td>IMDb 7.5</td><td>TMDB 72% → 7.2</td><td><b>0.3</b></td></tr></table>
+      ตัวอย่างนี้ตอบ <b>คนดู</b> เพราะห่างกันน้อยกว่า (ตัวเลขสมมติ ไม่ใช่หนังในแบบทดสอบ)`,
+  B: `<b>วิธี B — ใช้ CineMeter</b>
+      <ol class="steps">
+        <li>กดปุ่ม <b>เปิด CineMeter</b> (เปิดแท็บใหม่)</li>
+        <li>พิมพ์ชื่อเรื่องในช่องค้นหาด้านบนของเว็บ แล้วกดการ์ดหนังเรื่องนั้น</li>
+        <li>ดูช่อง <b>Recommend side</b> — ถ้าเขียนว่า "เชื่อฝั่งนักวิจารณ์" ให้ตอบนักวิจารณ์ ถ้า "เชื่อฝั่งคนดู" ให้ตอบคนดู (เว็บคำนวณการลบแบบวิธี A ให้แล้ว ดูตัวเลข S.D. ใต้คะแนนแต่ละฝั่งได้ ยิ่งน้อยยิ่งเห็นตรงกัน)</li>
+      </ol>`
 };
 const SIDE_TH = { critics: "นักวิจารณ์", audience: "คนดู", unsure: "บอกไม่ได้" };
 
@@ -121,7 +142,8 @@ let state = load();
 
 function result() {
   return {
-    v: 1, id: state.code, order: state.plan.order.join(""), setA: state.plan.setFor.A,
+    // ui 2 = คำอธิบาย/ปุ่มชุดใหม่ (8 ต.ค. 2026) โจทย์ หนัง และเฉลยเดิม
+    v: 1, ui: 2, id: state.code, order: state.plan.order.join(""), setA: state.plan.setFor.A,
     tasks: state.tasks.map(t => ({ film: t.id, method: t.method, set: t.set, sec: t.sec, side: t.side, correct: t.correct, watch: t.watch, sites: t.sites })),
     ratings: state.ratings, foryou: state.foryou, notes: state.notes, at: state.finishedAt
   };
@@ -150,7 +172,12 @@ function go(step) { state.step = step; save(); render(); window.scrollTo(0, 0); 
 const screens = {
   consent() {
     return `<h1>ขอบคุณที่ช่วยทดสอบ CineMeter</h1>
-      <p>CineMeter เป็นเว็บที่รวมคะแนนหนังจากนักวิจารณ์และคนดูไว้ในที่เดียว เราอยากรู้ว่าเว็บช่วยให้ตัดสินใจเลือกหนังเร็วขึ้นจริงไหม ใช้เวลาประมาณ <b>10–12 นาที</b></p>
+      <div class="what">
+        <h2>CineMeter คืออะไร</h2>
+        <p><b>ปัญหา:</b> ก่อนเลือกดูหนังสักเรื่อง หลายคนเปิดเว็บรีวิวหลายเว็บ — Rotten Tomatoes กับ Metacritic เป็นคะแนน<b>นักวิจารณ์</b> ส่วน IMDb กับ TMDB เป็นคะแนน<b>คนดู</b> แต่คะแนนมักไม่ตรงกัน เลยไม่รู้จะเชื่อใคร</p>
+        <p><b>CineMeter</b> เป็นเว็บที่เราทำขึ้น รวมคะแนนทั้ง 4 เว็บไว้หน้าเดียว แล้วบอกว่า<b>ควรเชื่อฝั่งไหน</b> โดยดูว่าเว็บในฝั่งเดียวกันให้คะแนนใกล้กันไหม (ถ้า 2 เว็บให้ใกล้กัน = ฝั่งนั้นเห็นตรงกันเอง น่าเชื่อกว่า)</p>
+        <p><b>สิ่งที่เราอยากรู้:</b> ใช้ CineMeter แล้วหาคำตอบได้เร็วและถูกกว่าการเปิดเว็บรีวิวเองไหม — คุณจะได้ลองทั้ง 2 วิธี ใช้เวลาประมาณ <b>10–12 นาที</b></p>
+      </div>
       <h2>ข้อมูลที่เก็บ (PDPA)</h2>
       <ul>
         <li>เวลาที่ใช้ คำตอบ คะแนนความพึงพอใจ และความเห็นที่คุณพิมพ์</li>
@@ -187,10 +214,10 @@ const screens = {
       <ul><li>ช่วงที่ 1: <b>${METHOD[m1].name}</b></li><li>ช่วงที่ 2: <b>${METHOD[m2].name}</b></li></ul>
       <p>แต่ละเรื่องให้กด <b>เริ่มจับเวลา</b> แล้วหาคำตอบ 2 ข้อ:</p>
       <ul>
-        <li><b>(ก)</b> ฝั่งไหนคะแนนเกาะกลุ่มกว่า คือแหล่งคะแนนในฝั่งนั้นให้คะแนนใกล้กันกว่า</li>
+        <li><b>(ก)</b> ฝั่งไหนคะแนนเกาะกลุ่มกว่า — ทั้งฝั่งนักวิจารณ์และฝั่งคนดูมีฝั่งละ 2 เว็บ ฝั่งที่ 2 เว็บให้คะแนน<b>ใกล้กันกว่า</b>คือฝั่งที่เห็นตรงกันเองมากกว่า น่าเชื่อกว่า (เหมือนถามเพื่อน 2 คนแล้วตอบตรงกัน) การลบคะแนนในวิธี A ก็เพื่อวัดว่า 2 เว็บห่างกันแค่ไหน</li>
         <li><b>(ข)</b> จากข้อมูลที่เห็น คุณจะดูเรื่องนี้ไหม</li>
       </ul>
-      <h2>วิธีดูว่าฝั่งไหนเกาะกลุ่มกว่า</h2>
+      <h2>วิธีหาคำตอบข้อ (ก) ของแต่ละวิธี</h2>
       <div class="note">${HOW_TO.A}</div>
       <div class="note" style="margin-top:8px">${HOW_TO.B}</div>
       <p class="muted">ระหว่างทำ จะมีคำอธิบายของวิธีที่กำลังทำอยู่ใต้ข้อ (ก) ให้ดูอีกครั้ง</p>
@@ -206,23 +233,32 @@ const screens = {
       <p class="film">${esc(f.title)} <span class="muted">(${f.year})</span></p>`;
     if (!state.startedAt) {
       return `${head}<p>${method === "A"
-        ? "ใช้เว็บรีวิว 4 เว็บ (มีลิงก์ค้นหาให้หลังกดเริ่ม) ห้ามใช้ CineMeter ในช่วงนี้"
-        : "ใช้ CineMeter อย่างเดียว พิมพ์ชื่อเรื่องในช่องค้นหาของเว็บ"}</p>
+        ? "ช่วงนี้ใช้เว็บรีวิว 4 เว็บเท่านั้น ห้ามใช้ CineMeter"
+        : "ช่วงนี้ใช้ CineMeter อย่างเดียว"}</p>
+        <ol class="steps">
+          <li>กด <b>เริ่มจับเวลา</b> ด้านล่าง</li>
+          <li>จะมีปุ่ม${method === "A" ? "เปิดเว็บรีวิว 4 ปุ่ม" : "เปิด CineMeter"}ขึ้นมา กดได้เลย เว็บจะเปิดใน<b>แท็บใหม่</b></li>
+          <li>หาคำตอบตามวิธีที่อธิบายไว้</li>
+          <li>กลับมาที่แท็บนี้ ตอบคำถาม แล้วกด <b>ส่งคำตอบ</b> (เวลาหยุดตอนกดส่ง)</li>
+        </ol>
         <div class="actions"><button class="primary" id="start">เริ่มจับเวลา</button></div>`;
     }
     const links = method === "A"
       ? `<div class="links">
-          <a target="_blank" rel="noopener" href="https://www.rottentomatoes.com/search?search=${q}">Rotten Tomatoes ↗</a>
-          <a target="_blank" rel="noopener" href="https://www.metacritic.com/search/${q}/">Metacritic ↗</a>
-          <a target="_blank" rel="noopener" href="https://www.imdb.com/find/?q=${q}">IMDb ↗</a>
-          <a target="_blank" rel="noopener" href="https://www.themoviedb.org/search?query=${q}">TMDB ↗</a></div>`
-      : `<a class="big" target="_blank" rel="noopener" href="${CINEMETER_URL}">เปิด CineMeter ↗</a>`;
+          <a target="_blank" rel="noopener" href="https://www.rottentomatoes.com/search?search=${q}">กดเปิด Rotten Tomatoes ↗</a>
+          <a target="_blank" rel="noopener" href="https://www.metacritic.com/search/${q}/">กดเปิด Metacritic ↗</a>
+          <a target="_blank" rel="noopener" href="https://www.imdb.com/find/?q=${q}">กดเปิด IMDb ↗</a>
+          <a target="_blank" rel="noopener" href="https://www.themoviedb.org/search?query=${q}">กดเปิด TMDB ↗</a></div>
+        <p class="tap">ทั้ง 4 ปุ่มกดได้ — เปิดในแท็บใหม่และค้นชื่อเรื่องให้แล้ว หาคะแนนเสร็จให้กลับมาที่แท็บนี้</p>`
+      : `<a class="big" target="_blank" rel="noopener" href="${CINEMETER_URL}">กดเปิด CineMeter ↗</a>
+        <p class="tap">เปิดในแท็บใหม่ — พิมพ์ชื่อเรื่องในช่องค้นหา ดูเสร็จให้กลับมาที่แท็บนี้</p>`;
     return `${head}<p class="timer">กำลังจับเวลา <span id="clock">0:00</span></p>${links}
       <p><b>(ก)</b> ฝั่งไหนคะแนนเกาะกลุ่มกว่า</p>
       <div class="note" style="margin-bottom:8px">${HOW_TO[method]}</div>
       ${radio("side", "critics", "นักวิจารณ์")}${radio("side", "audience", "คนดู")}${radio("side", "unsure", "บอกไม่ได้")}
       <p><b>(ข)</b> คุณจะดูเรื่องนี้ไหม</p>${radio("watch", "yes", "ดู")}${radio("watch", "no", "ไม่ดู")}
       <p>เปิดไปกี่เว็บ (รวมทุกแท็บที่เปิดหาข้อมูลเรื่องนี้)</p>
+      <p class="muted" style="margin-top:-8px">เช่น วิธี A ปกติ 4 เว็บ, วิธี B ปกติ 1 เว็บ ถ้าเปิดเว็บอื่นเพิ่มให้นับด้วย</p>
       <input type="number" id="sites" min="0" max="30" inputmode="numeric">
       <p class="err" id="err"></p>
       <div class="actions"><button class="primary" id="next">ส่งคำตอบ (หยุดเวลา)</button></div>`;
@@ -242,7 +278,8 @@ const screens = {
         <li>เปิด CineMeter แล้วค้นหนัง <b>3 เรื่องที่คุณชอบจริง</b> เปิดหน้ารายละเอียดแล้วกด <b>♡ ชอบเรื่องนี้</b></li>
         <li>กลับหน้าแรก ดูแถว <b>For you</b> ด้านบน</li>
       </ol>
-      <a class="big" target="_blank" rel="noopener" href="${CINEMETER_URL}">เปิด CineMeter ↗</a>
+      <a class="big" target="_blank" rel="noopener" href="${CINEMETER_URL}">กดเปิด CineMeter ↗</a>
+      <p class="tap">เปิดในแท็บใหม่ ทำเสร็จแล้วกลับมาตอบที่แท็บนี้</p>
       <p>แถว For you ตรงใจคุณแค่ไหน</p>${scale("fy", "ไม่ตรงเลย", "ตรงมาก")}
       <p>ใน 6 เรื่องแรกของแถว มีกี่เรื่องที่คุณอยากดู</p>
       <div class="scale" style="grid-template-columns:repeat(7,1fr)">${[0, 1, 2, 3, 4, 5, 6].map(v => `<label><input type="radio" name="fyCount" value="${v}">${v}</label>`).join("")}</div>
