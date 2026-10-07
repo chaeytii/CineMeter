@@ -2163,6 +2163,21 @@
         let heroOnScreen = true;
         let heroSwapToken = 0;
 
+        // แบนเนอร์หมุนจาก For you 10 เรื่องแรก (HERO-PERS) — ยังไม่มีประวัติ/ล้างประวัติ = หนังดังเหมือนเดิม
+        const HERO_PERSONAL = 10;
+        let heroPersonal = [];   // For you 10 เรื่องแรกที่ใช้อยู่ (ว่าง = ใช้หนังดัง)
+        let heroPopular = [];    // pool หนังดังจาก primeHero
+        function usePersonalHero(movies) {
+            const next = (movies || []).filter(m => m && m.Poster).slice(0, HERO_PERSONAL);
+            const list = next.length >= 2 ? next : [];
+            if (list.map(m => m.id).join("|") === heroPersonal.map(m => m.id).join("|")) return false;
+            heroPersonal = list;
+            heroPool = heroPersonal.length ? heroPersonal : heroPopular;
+            heroQueue = [];
+            if (heroPool.length && typeof window !== "undefined" && window.rerollHero) window.rerollHero();
+            return true;
+        }
+
         function isHeroCandidate(m, minVotes, cutoff) {
             return m.Poster && getYear(m) >= cutoff && getYear(m) <= latestYear && getVotes(m) >= minVotes;
         }
@@ -2189,11 +2204,12 @@
 
             const cached = readStore(HERO_POOL_KEY, null);
             if (cached && Array.isArray(cached.pool) && cached.pool.length && Date.now() - cached.ts < HERO_CACHE_MS) {
-                heroPool = cached.pool;
+                heroPopular = cached.pool;
             } else {
-                heroPool = await buildHeroPool();
-                if (heroPool.length) writeStore(HERO_POOL_KEY, { ts: Date.now(), pool: heroPool });
+                heroPopular = await buildHeroPool();
+                if (heroPopular.length) writeStore(HERO_POOL_KEY, { ts: Date.now(), pool: heroPopular });
             }
+            heroPool = heroPersonal.length ? heroPersonal : heroPopular;   // For you อาจโหลดเสร็จก่อน
 
             if (heroPool.length) setHero(pickHero(), false);
             else heroInitialized = false;   // ยังไม่มีข้อมูล ให้ลองใหม่ได้ภายหลัง
@@ -2215,10 +2231,11 @@
             heroQueue = heroQueue.filter(id => ids.has(id) && id !== lastHeroId);
             if (!heroQueue.length) {
                 const all = heroPool.map(m => m.id);
-                heroQueue = shuffled(heroPool.length > 1 ? all.filter(id => id !== lastHeroId) : all);
+                const rest = heroPool.length > 1 ? all.filter(id => id !== lastHeroId) : all;
+                heroQueue = heroPersonal.length ? rest : shuffled(rest);   // For you: เรื่องที่ตรงที่สุดก่อน
             }
             const id = heroQueue.shift();
-            writeStore(HERO_QUEUE_KEY, heroQueue);
+            if (!heroPersonal.length) writeStore(HERO_QUEUE_KEY, heroQueue);   // ไม่ทับสำรับหนังดังที่เก็บไว้
             return heroPool.find(m => m.id === id) || heroPool[0];
         }
 
@@ -2273,7 +2290,8 @@
             if (token !== heroSwapToken) return;   // มีการเปลี่ยนเรื่องซ้อนเข้ามาระหว่างรอ
 
             const votes = getVotes(movie);
-            document.getElementById("hero-subtitle").innerText = `Featured spotlight · ${movie.Year || ""}`;
+            const label = heroPersonal.some(m => m.id === movie.id) ? "For you" : "Featured spotlight";
+            document.getElementById("hero-subtitle").innerText = `${label} · ${movie.Year || ""}`;
             document.getElementById("hero-title").innerText = getEnglishTitle(movie);   // ชื่ออังกฤษล้วน ไม่มีวงเล็บ
             document.getElementById("hero-description").innerText = movie.Plot || "Explore ratings, statistics and details in the CineMeter database.";
 
@@ -2407,7 +2425,7 @@
                 if (cur && row && cur.dataset.sig === row.sig) { anchor = cur; continue; }
                 if (cur) cur.remove();
                 rowState.delete(key);
-                if (!row) continue;
+                if (!row) { if (key === "foryou") usePersonalHero([]); continue; }
                 if (anchor) anchor.insertAdjacentHTML("afterend", homeRowHtml(row));
                 else wrap.insertAdjacentHTML("afterbegin", homeRowHtml(row));
                 anchor = wrap.querySelector(`.home-row[data-row="${key}"]`);
@@ -2443,6 +2461,8 @@
                 });
             }, { rootMargin: "300px" });
             wrap.querySelectorAll(".home-row").forEach(sec => io.observe(sec));
+            // แบนเนอร์ใช้ For you ด้วย (HERO-PERS) → โหลดแถวนี้ทันทีไม่ต้องรอเลื่อนลงมา
+            if (wrap.querySelector('.home-row[data-row="foryou"]')) loadHomeRow("foryou");
         }
 
         function loadHomeRow(key) {
@@ -2473,6 +2493,7 @@
                         for (const g of row.genres) genreLists.push((await loadRanked(f.popular, null, { ...f, genre: g })).movies.filter(m => !familyCartoonOutOfPlace(m, g)));
                     }
                     movies = fromLikes.concat(mixForYou(genreLists, skip.concat(fromLikes.map(m => m.id)), ROW_SIZE - fromLikes.length));
+                    usePersonalHero(movies);
                 } else if (row.liked) {
                     movies = await loadMoviesByIds(row.ids);
                 } else {
