@@ -1319,6 +1319,30 @@
                 .map(x => x.m);
         }
 
+        // ค้นชื่อแบบขึ้นต้นด้วยคำค้นใน Firestore (ไทยหรืออังกฤษ) — ใช้ตอน Algolia ล่ม
+        // และเติมเรื่องที่ไม่อยู่ใน Algolia (แผนฟรีเก็บได้ 50,000 เรื่องที่โหวตมากที่สุด) (SEARCH-02)
+        const SEARCH_PREFIX_EXTRA = 5;
+        async function firestorePrefix(raw, cursor, size, primaryOnly = false) {
+            const col = collection(db, targetCollection);
+            const isThai = /[\u0E00-\u0E7F]/.test(raw);
+            const searchFields = primaryOnly ? [isThai ? "Title_TH" : "Title_EN"]   // เติมผล Algolia: อ่าน Firestore ให้น้อยที่สุด
+                : isThai ? ["Title_TH", "Title_th", "title_th", "TitleTH", "Title"] : ["Title_EN", "Title"];
+            const titleCase = raw.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase());   // "i feel you" → "I Feel You"
+            const variants = isThai ? [raw] : [...new Set([raw.charAt(0).toUpperCase() + raw.slice(1), titleCase, raw, raw.toUpperCase()])];
+            for (const field of searchFields) {
+                for (const v of variants) {
+                    try {
+                        const parts = [orderBy(field), startAt(v), endAt(v + "\uf8ff")];
+                        if (cursor && cursor.id) parts.push(startAfter(cursor));
+                        parts.push(limit(size));
+                        const res = await getDocs(query(col, ...parts));
+                        if (res.docs.length) return res;
+                    } catch (e) { }
+                }
+            }
+            return { docs: [] };
+        }
+
         async function loadSearch(term, cursor, f = snapshotFilters()) {
             await detectValidCollection();
             const raw = term.trim();
@@ -1333,6 +1357,10 @@
                     const perPage = filtering ? 100 : PAGE_SIZE;
                     const maxPages = filtering ? ALGOLIA_MAX_FILTER_PAGES : 1;
                     let movies = [], nbPages = 0, scanned = 0;
+                    // หน้าแรก: ค้นชื่อขึ้นต้นใน Firestore ไปพร้อมกัน เผื่อเรื่องที่ไม่อยู่ใน Algolia
+                    const extraP = page === 0
+                        ? firestorePrefix(raw, null, SEARCH_PREFIX_EXTRA, true).then(s => s.docs.map(docToMovie)).catch(() => [])
+                        : Promise.resolve([]);
                     do {
                         const res = await searchAlgolia(raw, page, perPage);
                         nbPages = res.nbPages;
@@ -1340,6 +1368,9 @@
                         page = res.page + 1;
                         scanned++;
                     } while (movies.length < PAGE_SIZE && page < nbPages && scanned < maxPages);
+                    const have = new Set(movies.map(m => m.id));
+                    const extra = (await extraP).filter(m => m.Poster && !have.has(m.id) && passesFilters(m, f));
+                    if (extra.length) movies = sortSearchHits([...extra, ...movies], raw);
                     return {
                         movies,
                         cursor: page < nbPages ? page : null,
@@ -1351,8 +1382,6 @@
             }
 
             // ---- 2) Fallback: prefix search ของ Firestore + ค้นในหน้าที่โหลดแล้ว ----
-            const col = collection(db, targetCollection);
-            const isThai = /[\u0E00-\u0E7F]/.test(raw);
             const lower = raw.toLowerCase();
 
             let inMemoryMatches = [];
@@ -1364,22 +1393,7 @@
                 });
             }
 
-            const searchFields = isThai ? ["Title_TH", "Title_th", "title_th", "TitleTH", "Title"] : ["Title_EN", "Title"];
-            const variants = isThai ? [raw] : [raw.charAt(0).toUpperCase() + raw.slice(1), raw, raw.toUpperCase()];
-            let snap = { docs: [] };
-
-            outer:
-            for (const f of searchFields) {
-                for (const v of variants) {
-                    try {
-                        const parts = [orderBy(f), startAt(v), endAt(v + "\uf8ff")];
-                        if (cursor && cursor.id) parts.push(startAfter(cursor));
-                        parts.push(limit(PAGE_SIZE));
-                        const res = await getDocs(query(col, ...parts));
-                        if (res.docs.length) { snap = res; break outer; }
-                    } catch (e) { }
-                }
-            }
+            const snap = await firestorePrefix(raw, cursor, PAGE_SIZE);
 
             let movies = (snap.docs || []).map(docToMovie);
             if (inMemoryMatches.length) {
