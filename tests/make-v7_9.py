@@ -506,6 +506,12 @@ PATCHES = [
     ('PERS-03 header comment',
      ' * - แถว "For you" บนหน้าแรก = หนังคล้าย 3 เรื่องล่าสุดที่กด ♥ (PERS-02) + หนังจากประเภทที่ได้ตั้งแต่ 2 แต้มขึ้นไป 2 อันดับแรก\n',
      ' * - แถว "For you" บนหน้าแรก = หนังคล้าย 3 เรื่องล่าสุดที่กด ♥ (PERS-02/03: keyword + ภาษาเดียวกัน) ขึ้นก่อน\n *   แล้วเติมด้วยหนังจากประเภทที่ได้ตั้งแต่ 2 แต้มขึ้นไป 2 อันดับแรก\n'),
+    ('PERS-04 older likes join the seeds',
+     '        const FOR_YOU_SEEDS = 3;   // ใช้เรื่องที่กดชอบล่าสุดกี่เรื่องหาหนังคล้ายกัน\n\n        function forYouRow(t = readTaste()) {\n            const genres = topGenres(t);\n            const seeds = t.liked.slice(0, FOR_YOU_SEEDS);\n',
+     '        const FOR_YOU_SEEDS = 3;   // ใช้เรื่องที่กดชอบล่าสุดกี่เรื่องหาหนังคล้ายกัน\n        const FOR_YOU_OLDER = 2;   // + สุ่มจากเรื่องที่กดชอบก่อนหน้านั้นอีกกี่เรื่อง ให้แนวที่เคยชอบยังโผล่มาบ้าง (PERS-04)\n        let olderPick = { key: "", ids: [] };   // สุ่มครั้งเดียวต่อการเปิดหน้า แล้วสุ่มใหม่เมื่อรายการที่ชอบเปลี่ยน\n\n        function pickOlderLikes(liked, rand = Math.random) {\n            const key = liked.join("|");\n            if (olderPick.key !== key) {\n                const pool = liked.slice(FOR_YOU_SEEDS);\n                const ids = [];\n                while (ids.length < FOR_YOU_OLDER && pool.length) ids.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);\n                olderPick = { key, ids };\n            }\n            return olderPick.ids;\n        }\n\n        function forYouRow(t = readTaste()) {\n            const genres = topGenres(t);\n            const seeds = [...t.liked.slice(0, FOR_YOU_SEEDS), ...pickOlderLikes(t.liked)];\n'),
+    ('PERS-04 header comment',
+     ' * - แถว "For you" บนหน้าแรก = หนังคล้าย 3 เรื่องล่าสุดที่กด ♥ (PERS-02/03: keyword + ภาษาเดียวกัน) ขึ้นก่อน\n',
+     ' * - แถว "For you" บนหน้าแรก = หนังคล้าย 3 เรื่องล่าสุดที่กด ♥ + สุ่มอีก 2 เรื่องจากที่เคยกด ♥ ก่อนหน้า (PERS-02/03/04: keyword + ภาษาเดียวกัน) ขึ้นก่อน\n'),
 ]
 for name, old, new in PATCHES:
     n = src.count(old)

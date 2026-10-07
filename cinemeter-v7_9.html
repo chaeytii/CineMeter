@@ -1910,7 +1910,7 @@
          * PERSONALIZED แบบไม่ต้องล็อกอิน (PERS-01)
          * เบราว์เซอร์เครื่องนั้นจำเอง (localStorage) ว่าผู้ใช้ชอบหนังประเภทไหน ไม่มีอะไรส่งขึ้นเซิร์ฟเวอร์
          * - เปิดหน้ารายละเอียด 1 ครั้ง = ประเภทของเรื่องนั้นได้ +1, กด ♥ = +3 (กดซ้ำ = ยกเลิก -3)
-         * - แถว "For you" บนหน้าแรก = หนังคล้าย 3 เรื่องล่าสุดที่กด ♥ (PERS-02/03: keyword + ภาษาเดียวกัน) ขึ้นก่อน
+         * - แถว "For you" บนหน้าแรก = หนังคล้าย 3 เรื่องล่าสุดที่กด ♥ + สุ่มอีก 2 เรื่องจากที่เคยกด ♥ ก่อนหน้า (PERS-02/03/04: keyword + ภาษาเดียวกัน) ขึ้นก่อน
  *   แล้วเติมด้วยหนังจากประเภทที่ได้ตั้งแต่ 2 แต้มขึ้นไป 2 อันดับแรก
  *   ไม่ซ้ำเรื่องที่เปิดดูหรือกดชอบแล้ว และโหลดใหม่ทุกครั้งที่ประวัติเปลี่ยน
  * - แถว "Your likes" = เรื่องที่กด ♥ ไว้ ใหม่สุดก่อน (เก็บแค่รหัสหนังในเครื่อง)
@@ -1980,10 +1980,23 @@
         }
 
         const FOR_YOU_SEEDS = 3;   // ใช้เรื่องที่กดชอบล่าสุดกี่เรื่องหาหนังคล้ายกัน
+        const FOR_YOU_OLDER = 2;   // + สุ่มจากเรื่องที่กดชอบก่อนหน้านั้นอีกกี่เรื่อง ให้แนวที่เคยชอบยังโผล่มาบ้าง (PERS-04)
+        let olderPick = { key: "", ids: [] };   // สุ่มครั้งเดียวต่อการเปิดหน้า แล้วสุ่มใหม่เมื่อรายการที่ชอบเปลี่ยน
+
+        function pickOlderLikes(liked, rand = Math.random) {
+            const key = liked.join("|");
+            if (olderPick.key !== key) {
+                const pool = liked.slice(FOR_YOU_SEEDS);
+                const ids = [];
+                while (ids.length < FOR_YOU_OLDER && pool.length) ids.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
+                olderPick = { key, ids };
+            }
+            return olderPick.ids;
+        }
 
         function forYouRow(t = readTaste()) {
             const genres = topGenres(t);
-            const seeds = t.liked.slice(0, FOR_YOU_SEEDS);
+            const seeds = [...t.liked.slice(0, FOR_YOU_SEEDS), ...pickOlderLikes(t.liked)];
             if (!genres.length && !seeds.length) return null;
             // sig เปลี่ยนทุกครั้งที่ประวัติเปลี่ยน -> กลับหน้าแรกแล้วแถวโหลดใหม่ (ตัดเรื่องที่เพิ่งเปิด/กดชอบออก)
             const sig = [genres.join("|"), seeds.join("|"), t.liked.length, t.seen.length].join("#");
