@@ -43,7 +43,11 @@
 </main>
 <script>
 /* หน้าสรุปผลจาก usertest.html — ข้อ (ก) ตรวจกับเฉลยชุดเดียวกัน ไม่เชื่อค่า correct ที่มากับผล */
-const ANSWERS = { tt7069210: "critics", tt0172495: "audience", tt16366836: "critics", tt0114369: "audience" };
+// เฉลยข้อ (ก): ชุด 1 Mufasa / Joker, ชุด 2 The Conjuring 3 / Black Panther (ที่เหลือคือหนังชุดเดิมที่เคยใช้ลองระบบ)
+const ANSWERS = {
+  tt13186482: "critics", tt7286456: "audience", tt7069210: "critics", tt1825683: "audience",
+  tt0172495: "audience", tt16366836: "critics", tt0114369: "audience"
+};
 const SLOW_SEC = 600;
 
 const median = xs => {
