@@ -512,6 +512,37 @@ PATCHES = [
     ('PERS-04 header comment',
      ' * - แถว "For you" บนหน้าแรก = หนังคล้าย 3 เรื่องล่าสุดที่กด ♥ (PERS-02/03: keyword + ภาษาเดียวกัน) ขึ้นก่อน\n',
      ' * - แถว "For you" บนหน้าแรก = หนังคล้าย 3 เรื่องล่าสุดที่กด ♥ + สุ่มอีก 2 เรื่องจากที่เคยกด ♥ ก่อนหน้า (PERS-02/03/04: keyword + ภาษาเดียวกัน) ขึ้นก่อน\n'),
+    ('PERS-05 rank For you as one list',
+     '            return similarCache.get(seed.id);\n        }\n\n        function syncLikeButton(movie) {\n',
+     '            return similarCache.get(seed.id);\n        }\n\n'
+     '        // เรียงหนังคล้ายเรื่องที่ชอบรวมเป็นแถวเดียว (PERS-05) แทนการหยิบสลับทีละเรื่องที่ชอบ:\n'
+     '        // วัดแต่ละเรื่องกับทุกเรื่องที่ชอบ (คล้ายหลายเรื่อง = ขึ้นก่อน, คะแนนรวมแบบลดหลั่น s1 + s2/2 + s3/4 ...) + คะแนนคนดูเล็กน้อย\n'
+     '        // เรื่องที่ชอบเรื่องเดียวกินช่องได้ไม่เกินครึ่งแถว ส่วนเกินต่อท้ายเมื่อแถวยังไม่เต็ม\n'
+     '        const FOR_YOU_SEED_CAP = 0.5;\n'
+     '        function rankForYou(seeds, lists, seen, size) {\n'
+     '            const skip = new Set(seen), pool = new Map();\n'
+     '            lists.forEach(list => (list || []).forEach(m => {\n'
+     '                if (m && m.Poster && !skip.has(m.id) && !pool.has(m.id)) pool.set(m.id, m);\n'
+     '            }));\n'
+     '            const scored = [...pool.values()].map(m => {\n'
+     '                const s = seeds.map((seed, i) => ({ i, v: forYouScore(seed, m) })).sort((a, b) => b.v - a.v);\n'
+     '                const quality = Math.max(0, toNum(m.Audience_Average) - 5) * 0.2;\n'
+     '                return { m, from: s.length ? s[0].i : -1, score: s.reduce((sum, x, k) => sum + x.v / 2 ** k, 0) + quality };\n'
+     '            }).sort((a, b) => b.score - a.score);\n'
+     '            const cap = Math.ceil(size * FOR_YOU_SEED_CAP), used = new Map(), out = [], extra = [];\n'
+     '            for (const x of scored) {\n'
+     '                const n = used.get(x.from) || 0;\n'
+     '                if (n < cap) { used.set(x.from, n + 1); out.push(x.m); } else extra.push(x.m);\n'
+     '            }\n'
+     '            return out.concat(extra).slice(0, size);\n'
+     '        }\n\n'
+     '        function syncLikeButton(movie) {\n'),
+    ('PERS-05 use rankForYou',
+     '                    const fromLikes = mixForYou(await Promise.all(seeds.map(similarToLiked)), skip, ROW_SIZE);\n',
+     '                    const fromLikes = rankForYou(seeds, await Promise.all(seeds.map(similarToLiked)), skip, ROW_SIZE);\n'),
+    ('PERS-05 header comment',
+     '(PERS-02/03/04: keyword + ภาษาเดียวกัน) ขึ้นก่อน\n',
+     '(PERS-02/03/04: keyword + ภาษาเดียวกัน) ขึ้นก่อน\n         *   เรียงทั้งแถวด้วยคะแนนรวม: คล้ายหลายเรื่องที่ชอบ + คะแนนคนดู ขึ้นก่อน (PERS-05)\n'),
 ]
 for name, old, new in PATCHES:
     n = src.count(old)

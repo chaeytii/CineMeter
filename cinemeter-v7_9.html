@@ -1911,6 +1911,7 @@
          * เบราว์เซอร์เครื่องนั้นจำเอง (localStorage) ว่าผู้ใช้ชอบหนังประเภทไหน ไม่มีอะไรส่งขึ้นเซิร์ฟเวอร์
          * - เปิดหน้ารายละเอียด 1 ครั้ง = ประเภทของเรื่องนั้นได้ +1, กด ♥ = +3 (กดซ้ำ = ยกเลิก -3)
          * - แถว "For you" บนหน้าแรก = หนังคล้าย 3 เรื่องล่าสุดที่กด ♥ + สุ่มอีก 2 เรื่องจากที่เคยกด ♥ ก่อนหน้า (PERS-02/03/04: keyword + ภาษาเดียวกัน) ขึ้นก่อน
+         *   เรียงทั้งแถวด้วยคะแนนรวม: คล้ายหลายเรื่องที่ชอบ + คะแนนคนดู ขึ้นก่อน (PERS-05)
  *   แล้วเติมด้วยหนังจากประเภทที่ได้ตั้งแต่ 2 แต้มขึ้นไป 2 อันดับแรก
  *   ไม่ซ้ำเรื่องที่เปิดดูหรือกดชอบแล้ว และโหลดใหม่ทุกครั้งที่ประวัติเปลี่ยน
  * - แถว "Your likes" = เรื่องที่กด ♥ ไว้ ใหม่สุดก่อน (เก็บแค่รหัสหนังในเครื่อง)
@@ -2066,6 +2067,28 @@
                     .catch(() => { similarCache.delete(seed.id); return []; }));
             }
             return similarCache.get(seed.id);
+        }
+
+        // เรียงหนังคล้ายเรื่องที่ชอบรวมเป็นแถวเดียว (PERS-05) แทนการหยิบสลับทีละเรื่องที่ชอบ:
+        // วัดแต่ละเรื่องกับทุกเรื่องที่ชอบ (คล้ายหลายเรื่อง = ขึ้นก่อน, คะแนนรวมแบบลดหลั่น s1 + s2/2 + s3/4 ...) + คะแนนคนดูเล็กน้อย
+        // เรื่องที่ชอบเรื่องเดียวกินช่องได้ไม่เกินครึ่งแถว ส่วนเกินต่อท้ายเมื่อแถวยังไม่เต็ม
+        const FOR_YOU_SEED_CAP = 0.5;
+        function rankForYou(seeds, lists, seen, size) {
+            const skip = new Set(seen), pool = new Map();
+            lists.forEach(list => (list || []).forEach(m => {
+                if (m && m.Poster && !skip.has(m.id) && !pool.has(m.id)) pool.set(m.id, m);
+            }));
+            const scored = [...pool.values()].map(m => {
+                const s = seeds.map((seed, i) => ({ i, v: forYouScore(seed, m) })).sort((a, b) => b.v - a.v);
+                const quality = Math.max(0, toNum(m.Audience_Average) - 5) * 0.2;
+                return { m, from: s.length ? s[0].i : -1, score: s.reduce((sum, x, k) => sum + x.v / 2 ** k, 0) + quality };
+            }).sort((a, b) => b.score - a.score);
+            const cap = Math.ceil(size * FOR_YOU_SEED_CAP), used = new Map(), out = [], extra = [];
+            for (const x of scored) {
+                const n = used.get(x.from) || 0;
+                if (n < cap) { used.set(x.from, n + 1); out.push(x.m); } else extra.push(x.m);
+            }
+            return out.concat(extra).slice(0, size);
         }
 
         function syncLikeButton(movie) {
@@ -2403,7 +2426,7 @@
                     const seeds = await loadMoviesByIds(row.seeds || []);
                     // เรื่องคล้ายที่กดชอบขึ้นก่อน หนังจากประเภทที่ชอบใช้เติมเมื่อยังไม่ครบแถว
                     const skip = [...t.seen, ...t.liked];
-                    const fromLikes = mixForYou(await Promise.all(seeds.map(similarToLiked)), skip, ROW_SIZE);
+                    const fromLikes = rankForYou(seeds, await Promise.all(seeds.map(similarToLiked)), skip, ROW_SIZE);
                     const genreLists = [];
                     if (fromLikes.length < ROW_SIZE) {
                         for (const g of row.genres) genreLists.push((await loadRanked(f.popular, null, { ...f, genre: g })).movies.filter(m => !familyCartoonOutOfPlace(m, g)));

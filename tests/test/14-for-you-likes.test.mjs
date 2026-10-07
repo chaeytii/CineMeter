@@ -164,3 +164,41 @@ test("[BL-PL-08] กดชอบ Iron Man ไว้ก่อน แล้วก�
   assert.ok(thaiBL.slice(3).some(m => shown.includes(m.Title_EN)), shown.join(", "));
   assert.ok(studio.some(m => shown.includes(m.Title_EN)), shown.join(", "));
 });
+
+// PERS-05: เรียงทั้งแถวด้วยคะแนนรวม แทนการหยิบสลับทีละเรื่องที่ชอบ
+const kwFilm = (id, kw, extra = {}) => film(id, id, { Keywords: kw, Companies: [], Genres: ["ดราม่า"], Genre_for_cal: "ดราม่า", ...extra });
+
+test("[BL-PL-09] rankForYou: หนังที่คล้ายเรื่องที่ชอบสองเรื่องขึ้นก่อนหนังที่คล้ายเรื่องเดียว แม้มาจากท้ายรายการ", () => {
+  const seedA = kwFilm("sa", ["space", "robot", "war"]);
+  const seedB = kwFilm("sb", ["space", "family", "music"]);
+  const onlyA = kwFilm("onlyA", ["robot", "war"]);
+  const both = kwFilm("both", ["space", "robot", "family"]);
+  const onlyB = kwFilm("onlyB", ["family", "music"]);
+  // แบบเดิม (สลับทีละเรื่อง) ได้ onlyA, onlyB ก่อน both
+  assert.deepEqual(app.mixForYou([[onlyA, both], [onlyB, both]], [], 3).map(m => m.id), ["onlyA", "onlyB", "both"]);
+  const out = app.rankForYou([seedA, seedB], [[onlyA, both], [onlyB, both]], [], 3).map(m => m.id);
+  assert.equal(out[0], "both", out.join(", "));
+  assert.equal(new Set(out).size, 3);
+});
+
+test("[BL-PL-10] rankForYou: ความคล้ายเท่ากัน → เรื่องที่คนดูให้คะแนนสูงกว่าขึ้นก่อน", () => {
+  const seed = kwFilm("s", ["heist", "crime"]);
+  const low = kwFilm("low", ["heist", "crime"], { Audience_Average: 5.5 });
+  const high = kwFilm("high", ["heist", "crime"], { Audience_Average: 8.5 });
+  assert.deepEqual(app.rankForYou([seed], [[low, high]], [], 2).map(m => m.id), ["high", "low"]);
+});
+
+test("[BL-PL-11] (edge) rankForYou: เรื่องที่ชอบเรื่องเดียวได้ไม่เกินครึ่งแถว ส่วนเกินต่อท้ายเมื่อแถวไม่เต็ม, ข้ามเรื่องที่เคยเปิด/ไม่มีโปสเตอร์", () => {
+  const seedA = kwFilm("sa", ["zombie", "virus", "city"]);
+  const seedB = kwFilm("sb", ["chef", "food", "paris"]);
+  const zs = Array.from({ length: 6 }, (_, i) => kwFilm(`z${i}`, ["zombie", "virus", "city"]));
+  const fs = Array.from({ length: 2 }, (_, i) => kwFilm(`f${i}`, ["chef"]));
+  const out = app.rankForYou([seedA, seedB], [zs, fs], [], 4).map(m => m.id);
+  assert.equal(out.filter(id => id.startsWith("z")).length, 2, out.join(", "));
+  assert.equal(out.filter(id => id.startsWith("f")).length, 2, out.join(", "));
+  const all = app.rankForYou([seedA, seedB], [zs, fs], ["z0"], 20).map(m => m.id);
+  assert.equal(all.length, 7, "แถวไม่เต็ม → เติมส่วนเกินจนหมด (ข้าม z0 ที่เคยเปิด)");
+  assert.ok(!all.includes("z0"));
+  assert.deepEqual(app.rankForYou([seedA], [[{ ...zs[1], Poster: "" }]], [], 5), []);
+  assert.deepEqual(app.rankForYou([], [], [], 5), []);
+});
