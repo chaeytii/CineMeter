@@ -67,15 +67,15 @@ test("[BL-SM-03] ค่ายผลิตเดียวกันได้คะ
   assert.equal(app.getCollectionId({ CollectionID: "N/A" }), 0);
 });
 
-test("[BL-SM-04] คัดหนังที่คนรู้จัก: ตัดเรื่องที่โหวตน้อยกว่า 20% ของต้นทาง (ขั้นต่ำ 5,000) เฉพาะเมื่อยังเหลือ ≥ 8 เรื่อง", () => {
+test("[BL-SM-04] คัดหนังที่คนรู้จัก: ตัดเรื่องที่โหวตน้อยกว่า 20% ของต้นทาง (ขั้นต่ำ 5,000 หรือครึ่งหนึ่งของโหวตต้นทางถ้าต้นทางโหวตน้อย) เฉพาะเมื่อยังเหลือ ≥ 8 เรื่อง", () => {
   const base = { imdbVotes: 1_000_000 };
   const known = Array.from({ length: 9 }, (_, i) => ({ id: "k" + i, imdbVotes: 200_000 + i }));
   const obscure = Array.from({ length: 5 }, (_, i) => ({ id: "o" + i, imdbVotes: 900 + i }));
   assert.deepEqual(app.keepFamiliar(base, [...obscure, ...known]).map(m => m.id), known.map(m => m.id));
   const few = [...obscure, ...known.slice(0, 3)];
   assert.equal(app.keepFamiliar(base, few).length, few.length, "เหลือน้อยเกินไป ใช้รายการเดิม");
-  const small = { imdbVotes: 2_000 };                 // หนังต้นทางโหวตน้อย → ใช้ขั้นต่ำ 5,000
-  const mixed = [...Array.from({ length: 8 }, (_, i) => ({ id: "m" + i, imdbVotes: 5_000 })), { id: "x", imdbVotes: 4_999 }];
+  const small = { imdbVotes: 2_000 };                 // หนังต้นทางโหวตน้อย → ขั้นต่ำ = ครึ่งหนึ่งของโหวตต้นทาง (1,000) (SIM-03)
+  const mixed = [...Array.from({ length: 8 }, (_, i) => ({ id: "m" + i, imdbVotes: 1_000 })), { id: "x", imdbVotes: 999 }];
   assert.deepEqual(app.keepFamiliar(small, mixed).map(m => m.id), mixed.slice(0, 8).map(m => m.id));
 });
 
@@ -115,4 +115,26 @@ test("[BL-SM-06] ตัวเลือกประเภท+ยุคเดี�
   await useDb(rows, { compositeIndex: false });
   const fallback = await app.buildCandidatePool(base);
   assert.ok(fallback.length >= 8, `fallback=${fallback.length}`);
+});
+
+test("[BL-SM-07] More like this ของซีรีส์ BL ไทยโหวตน้อย: ตัวเลือกรวมเรื่องภาษาเดียวกัน ไม่ตัดเรื่องแนวเดียวกันที่โหวตไม่ถึง 5,000 และจัดให้ขึ้นก่อนซีรีส์ดังต่างภาษา", async () => {
+  const bl = "boys' love (bl), romance, university, lgbt";
+  const mk = (id, title, lang, kw, votes, extra = {}) => ({
+    id, Title_EN: title, Title_TH: "", Year: "2023", Released: "2023-05-01", Genre_for_cal: "ตลก", Genres: ["ตลก", "หนังชีวิต"], MediaType: "ซีรีส์",
+    Language: lang, Keyword: kw, imdbVotes: votes, Popularity: votes / 100, Audience_Average: 7.9, Poster: `https://img.example/${id}.jpg`,
+    CollectionID: 0, Companies: [], ...extra });
+  const base = mk("ttbase", "Fourever You", "th", bl, 861);
+  const thaiBL = ["Love by Chance", "2gether", "Bad Buddy", "Love in the Air"].map((t, i) => mk(`ttth${i}`, t, "th", bl, 2_000 + i * 500));
+  const netflix = ["Sex Education", "Ted Lasso", "Shameless", "Wednesday", "Big Mouth", "Hazbin Hotel", "Young Sheldon", "The Rookie"]
+    .map((t, i) => mk(`tten${i}`, t, "en", "high school, friendship, comedy", 400_000 - i * 1000));
+  await useDb([...makeMovies(600, 7), base, ...thaiBL, ...netflix]);
+  const pool = await app.similarPool(base);
+  assert.ok(thaiBL.every(m => pool.some(c => c.id === m.id)), "ดึงเรื่องภาษาเดียวกันมาด้วย");
+  assert.ok(!pool.some(c => c.id === base.id));
+  const kept = app.keepFamiliar(base, pool);
+  assert.ok(thaiBL.every(m => kept.some(c => c.id === m.id)), "ไม่ตัด BL ที่โหวต 2,000+ ทิ้ง");
+  const w = app.keywordWeights([...kept, base]);
+  const top4 = kept.map(m => ({ m, s: app.preScore(base, m, w) })).sort((a, b) => b.s - a.s).slice(0, 4).map(x => x.m.id);
+  assert.deepEqual(top4.sort(), thaiBL.map(m => m.id).sort());
+  assert.equal(app.preScore(base, netflix[0]), app.preScore(base, netflix[0], undefined), "ไม่ส่ง weight = สูตรเดิม");
 });
