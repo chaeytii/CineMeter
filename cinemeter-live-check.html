@@ -849,6 +849,9 @@ async function loadSearch(term, cursor, f = snapshotFilters()) {
             };
         }
 
+// ↓ getLanguage (cinemeter-v7_9.html line 2046)
+function getLanguage(m) { return String(m?.Language ?? m?.language ?? "").trim().toLowerCase(); }
+
 // ↓ decideTrustSide (cinemeter-v7_9.html line 2648)
 function decideTrustSide(v) {
             const { overall, genreAudience, genreCritics } = v;
