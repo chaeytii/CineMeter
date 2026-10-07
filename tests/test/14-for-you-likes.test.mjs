@@ -92,3 +92,40 @@ test("[BL-PL-04] (edge) รหัสที่ไม่มีในฐานข�
   assert.ok(fy.length >= 10, fy.join(", "));
   assert.ok(studio.some(m => fy.includes(m.Title_EN)), "ยังได้หนังคล้าย Iron Man");
 });
+
+// ซีรีส์ BL ภาษาไทยโหวตน้อย กับหนัง drama ภาษาอังกฤษที่ดังมาก (ประเภทเดียวกัน ยุคเดียวกัน)
+const series = (id, title, lang, kw, votes, extra = {}) => ({
+  id, Title_EN: title, Title_TH: "", Year: "2020", Genre_for_cal: "หนังชีวิต", Genres: ["หนังชีวิต"], MediaType: "ซีรีส์",
+  Language: lang, Keyword: kw, imdbVotes: votes.toLocaleString("en-US"), Popularity: votes / 1000, imdbRating: "7.5", tmdbRating: 8.0,
+  Audience_Average: 7.8, Poster: `https://img.example/${id}.jpg`, CollectionID: 0, Companies: [], ...extra,
+});
+const BL = "boys' love (bl), romance, university, lgbt, gay theme";
+const thaiBL = ["Until We Meet Again", "2gether", "Bad Buddy", "KinnPorsche", "Love in the Air"].map((t, i) =>
+  series(`tt80000${i}`, t, "th", BL, 2600 + i * 300));
+const famousDrama = ["Big Drama", "Award Drama", "Hospital Drama", "Period Drama"].map((t, i) =>
+  series(`tt81000${i}`, t, "en", "hospital, family, friendship", 1_500_000 - i * 1000, { Audience_Average: 8.9, Popularity: 300 }));
+
+test("[BL-PL-05] กดชอบซีรีส์ BL ไทย → For you ขึ้นซีรีส์ BL ไทยก่อน แม้โหวตไม่ถึง 5,000 และหนัง drama ดัง ๆ ไม่แซงขึ้นมา", async () => {
+  localStorage.clear(); resetDom();
+  const base = makeMovies(1200, 11).map(r => ({ ...r, Poster: r.Poster || `https://img.example/${r.id}.jpg` }));
+  await useDb([...base, ...thaiBL, ...famousDrama]);
+  app.rowState.clear(); app.homePending?.clear(); app.similarCache?.clear();
+  app.toggleLike(thaiBL[0]);
+  const shown = await loadRow("foryou");
+  const top4 = shown.slice(0, 4);
+  assert.deepEqual([...top4].sort(), thaiBL.slice(1).map(m => m.Title_EN).sort(), shown.join(", "));
+  assert.ok(app.forYouScore(thaiBL[0], thaiBL[1]) > app.forYouScore(thaiBL[0], famousDrama[0]));
+});
+
+test("[BL-PL-06] (edge) ยังไม่ได้ deploy index ภาษา → ยังได้ซีรีส์ภาษาเดียวกัน; เรื่องคล้ายไม่พอ → เติมด้วยหนังจากประเภทที่ชอบจนครบแถว", async () => {
+  localStorage.clear(); resetDom();
+  const base = makeMovies(1200, 11).map(r => ({ ...r, Poster: r.Poster || `https://img.example/${r.id}.jpg` }));
+  await useDb([...base, ...thaiBL, ...famousDrama], { compositeIndex: false });
+  app.rowState.clear(); app.homePending?.clear(); app.similarCache?.clear();
+  app.toggleLike(thaiBL[0]);
+  const shown = await loadRow("foryou");
+  assert.ok(thaiBL.slice(1).every(m => shown.includes(m.Title_EN)), shown.join(", "));
+  assert.equal(shown.length, app.ROW_SIZE);
+  assert.equal(app.getLanguage({ Language: " TH " }), "th");
+  assert.equal(app.getLanguage({}), "");
+});
