@@ -91,6 +91,46 @@ test("[BL-SE-07] Algolia ล่ม → ถอยไปค้นด้วย Fire
   } finally { Object.assign(h.algolia, { appId: "", searchKey: "", indexName: "" }); }
 });
 
+// SEARCH-02: เรื่องที่ไม่อยู่ใน Algolia (แผนฟรีเก็บ 50,000 เรื่องที่โหวตมากที่สุด) ยังค้นด้วยชื่อเจอจาก Firestore
+const lowVote = { ...rows[0], id: "tt15451876", Title_EN: "I Feel You Linger in the Air", Title_TH: "หอมกลิ่นความรัก",
+  imdbVotes: 920, Poster: "https://img.example/linger.jpg" };
+
+test("[BL-SE-08] เรื่องโหวตน้อยที่ไม่อยู่ใน Algolia → ค้นชื่อไทยเต็มหรือต้นชื่ออังกฤษก็เจอจาก Firestore และขึ้นอันดับแรก", async () => {
+  await useDb([...rows, lowVote]);
+  Object.assign(h.algolia, { appId: "APP", searchKey: "KEY", indexName: "IDX" });
+  fakeAlgolia(rows.slice(0, 50));   // Algolia ไม่มีเรื่องนี้
+  try {
+    const th = await app.loadSearch("หอมกลิ่นความรัก", null, F({ search: "หอมกลิ่นความรัก" }));
+    assert.equal(th.movies[0]?.id, lowVote.id, JSON.stringify(th.movies.map(m => m.Title_TH)));
+    const en = await app.loadSearch("i feel you", null, F({ search: "i feel you" }));
+    assert.equal(en.movies[0]?.id, lowVote.id);
+  } finally { Object.assign(h.algolia, { appId: "", searchKey: "", indexName: "" }); }
+});
+
+test("[BL-SE-09] (edge) เรื่องที่อยู่ทั้ง Algolia และ Firestore ไม่ซ้ำ; หน้าถัดไปไม่ดึง Firestore ซ้ำ; ฟิลเตอร์ยังกรอง; Firestore error → ผล Algolia ตามเดิม", async () => {
+  const fdb = await useDb([...rows, lowVote]);
+  Object.assign(h.algolia, { appId: "APP", searchKey: "KEY", indexName: "IDX" });
+  fakeAlgolia([...rows, lowVote]);
+  try {
+    const r = await app.loadSearch("I Feel You", null, F({ search: "I Feel You" }));
+    assert.equal(r.movies.filter(m => m.id === lowVote.id).length, 1, "ไม่ซ้ำ");
+    const before = fdb.stats.queries;
+    await app.loadSearch("I Feel You", 1, F({ search: "I Feel You" }));
+    assert.equal(fdb.stats.queries, before, "หน้าถัดไปไม่อ่าน Firestore");
+    fakeAlgolia([]);
+    const other = lowVote.Genre_for_cal === "สยองขวัญ" ? "ตลก" : "สยองขวัญ";
+    const filtered = await app.loadSearch("หอมกลิ่น", null, F({ search: "หอมกลิ่น", genre: other }));
+    assert.ok(!filtered.movies.some(m => m.id === lowVote.id), "ไม่ตรงฟิลเตอร์ → ไม่แสดง");
+    fakeAlgolia(rows.slice(0, 30));
+    h.setGetDocs(async () => { throw new Error("offline"); });
+    const ok = await app.loadSearch("Movie", null, F({ search: "Movie" }));
+    assert.ok(ok.movies.length > 0, "Algolia ยังให้ผล");
+  } finally {
+    Object.assign(h.algolia, { appId: "", searchKey: "", indexName: "" });
+    await useDb(rows);
+  }
+});
+
 // ---------- chatbot retrieval plans ----------
 for (const [id, plan, check] of [
   ["AI-CB-08", { mode: "top" }, (ms) => ms.every((m, i) => i === 0 || m.Audience_Average <= ms[i - 1].Audience_Average)],
