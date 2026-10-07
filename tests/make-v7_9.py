@@ -642,6 +642,18 @@ PATCHES = [
     ('CHAT-02 store picks in history',
      '                chatHistory.push({ role: "model", text: reply.text });',
      '                chatHistory.push(modelTurn(reply));'),
+    ('AI-MODELS-01 fallback models still served by Google',
+     '        const GEMINI_FALLBACK_MODELS = ["gemini-3.1-flash-lite-preview", "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"];',
+     '        // Gemini 2.0 ปิดไปแล้ว (1 มิ.ย. 2026) และ 2.5 ตอบ 404 → สำรองด้วยรุ่นที่ยังเปิดและใช้แบบฟรีได้ (AI-MODELS-01)\n        const GEMINI_FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite-preview", "gemini-3.6-flash"];\n        const GEMINI_RETRY_MS = 1000;   // Google ตอบ 500/503 (คนใช้เยอะชั่วคราว) → รอแล้วลองรุ่นเดิมอีกครั้งก่อนเปลี่ยนรุ่น'),
+    ('AI-MODELS-01 retry overloaded model, stop on proxy rate limit',
+     '            for (const model of models) {\n                try {',
+     '            const retried = new Set();\n            for (let i = 0; i < models.length; i++) {\n                const model = models[i];\n                try {'),
+    ('AI-MODELS-01 status handling',
+     '                    if (!res.ok) {\n                        lastErr = new Error(`${model}: ${res.status}`);\n                        if (res.status === 404 || res.status === 400) continue;\n                        throw lastErr;\n                    }',
+     '                    if (!res.ok) {\n                        lastErr = new Error(`${model}: ${res.status}`);\n                        lastErr.status = res.status;\n                        const body = res.status === 429 && res.text ? await res.text().catch(() => "") : "";\n                        // 429 จาก Cloud Function = เกิน 20 ครั้ง/นาที ลองรุ่นอื่นก็โดนเหมือนกัน → หยุดเลย\n                        if (/too many requests/i.test(body)) { lastErr.fatal = true; throw lastErr; }\n                        if ((res.status === 500 || res.status === 503) && !retried.has(model)) {\n                            retried.add(model);\n                            await new Promise(r => setTimeout(r, GEMINI_RETRY_MS));\n                            models.splice(i + 1, 0, model);\n                        }\n                        continue;   // 400/404/429 โควตา/5xx → รุ่นถัดไป (โควตาฟรีนับแยกต่อรุ่น)\n                    }'),
+    ('AI-MODELS-01 keep fatal error',
+     '                } catch (err) {\n                    lastErr = err;\n                }\n            }\n            throw lastErr || new Error("Gemini request failed");',
+     '                } catch (err) {\n                    if (err.fatal) throw err;\n                    lastErr = err;\n                }\n            }\n            throw lastErr || new Error("Gemini request failed");'),
 ]
 for name, old, new in PATCHES:
     n = src.count(old)

@@ -3,7 +3,7 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { handleRequest, _hits } = require("./proxy");
 
-function fakeReq({ method = "POST", origin = "https://chaeytii.github.io", path = "/models/gemini-2.5-flash:generateContent", body, ip = "1.1.1.1" } = {}) {
+function fakeReq({ method = "POST", origin = "https://chaeytii.github.io", path = "/models/gemini-3.1-flash-lite:generateContent", body, ip = "1.1.1.1" } = {}) {
   const b = body === undefined ? { contents: [{ role: "user", parts: [{ text: "hi" }] }], generationConfig: { maxOutputTokens: 300 } } : body;
   return { method, path, body: b, ip, rawBody: Buffer.from(JSON.stringify(b)), get: h => (h.toLowerCase() === "origin" ? origin : undefined) };
 }
@@ -30,7 +30,7 @@ test("เว็บที่อนุญาต → ส่งต่อไป Gemin
   assert.equal(res.statusCode, 200);
   assert.equal(res.headers["Access-Control-Allow-Origin"], "https://chaeytii.github.io");
   assert.equal(fetchImpl.calls.length, 1);
-  assert.equal(fetchImpl.calls[0].url, "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent");
+  assert.equal(fetchImpl.calls[0].url, "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent");
   assert.equal(fetchImpl.calls[0].init.headers["x-goog-api-key"], "SECRET");
   assert.match(res.payload, /"ok"/);
   assert.ok(!res.payload.includes("SECRET"));
@@ -59,7 +59,7 @@ test("localhost ใช้ทดสอบได้", async () => {
 
 test("รุ่นที่ไม่อยู่ในรายการ หรือ path แปลก → 400", async () => {
   _hits.clear();
-  for (const path of ["/models/gemini-2.5-pro:generateContent", "/models/gemini-2.5-flash:streamGenerateContent", "/", "/models/../x:generateContent"]) {
+  for (const path of ["/models/gemini-2.5-pro:generateContent", "/models/gemini-2.0-flash:generateContent", "/models/gemini-3.1-flash-lite:streamGenerateContent", "/", "/models/../x:generateContent"]) {
     const { res, fetchImpl } = await run(fakeReq({ path }));
     assert.equal(res.statusCode, 400, path);
     assert.equal(fetchImpl.calls.length, 0);

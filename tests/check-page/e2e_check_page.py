@@ -140,7 +140,7 @@ async def handle(route):
                 t = (m.get("Title_EN", "") + " " + m.get("Title_TH", "")).lower().replace("-", " ")
                 return q.replace("-", " ") in t or (q == "odysey" and "odyssey" in t) or (q == "godfathr" and "godfather" in t) or (q == "wick" and "wick" in t)
             hits = [dict(m, objectID=m["id"]) for m in DATA["MOVIES"] if hit(m)]
-            hits.sort(key=lambda m: -m.get("imdbVotes", 0))
+            hits.sort(key=lambda m: -int(str(m.get("imdbVotes") or 0).replace(",", "") or 0))
             per, page = b.get("hitsPerPage", 20), b.get("page", 0)
             return await route.fulfill(status=200, content_type="application/json", body=json.dumps({"hits": hits[page*per:(page+1)*per], "nbHits": len(hits), "page": page, "nbPages": max(1, -(-len(hits)//max(per, 1)))}))
         if "generativelanguage.googleapis.com" in url or "cloudfunctions.net/gemini" in url:

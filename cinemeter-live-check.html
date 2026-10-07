@@ -40,7 +40,7 @@ textarea{width:100%;min-height:220px;background:#0a1628;color:var(--text);border
 <section><div class="sh"><div><h2>5. Recommend side บนข้อมูลจริง</h2><p>รันกติกา Recommend side (โค้ดเดียวกับแอป) กับกลุ่มตัวอย่าง: สัดส่วนคำตัดสิน, กรณีเส้นขอบ, การใช้ค่าระดับประเภทแทน</p></div><div><span class="cost">ใช้ตัวอย่างเดิม</span> <button id="btn-ver" type="button">รัน</button></div></div><div id="out-ver"></div></section>
 <section><div class="sh"><div><h2>EDA — สำรวจข้อมูลก่อนวิเคราะห์</h2><p>การกระจายคะแนนสองฝั่ง, ช่องห่างคนดู − นักวิจารณ์, ช่องห่างแยกตามประเภท, ข้อมูลที่ขาด, ช่องห่างตามจำนวนโหวต — ดาวน์โหลดกราฟเป็น PNG และข้อมูลเป็น CSV ได้</p></div><div><span class="cost">ใช้ตัวอย่างเดิม</span> <button id="btn-eda" type="button">รัน</button></div></div><div id="out-eda"></div></section>
 <section><div class="sh"><div><h2>6. ฟิลเตอร์และ index</h2><p>ยิงฟิลเตอร์หลายเงื่อนไขกับฐานจริง ตรวจว่าทุกเรื่องผ่านครบ, ตรวจว่ามี composite index หรือยัง, ตรวจหน้าแรกของการเรียงตามคะแนน</p></div><div><span class="cost">~700 reads</span> <button id="btn-fil" type="button">รัน</button></div></div><div id="out-fil"></div></section>
-<section><div class="sh"><div><h2>7. การค้นหา Algolia</h2><p>9 กรณี: ชื่อเต็ม, พิมพ์บางส่วน, พิมพ์ผิด, คำกลางชื่อ, ภาษาไทย, วรรณยุกต์เกิน, จัดอันดับตามโหวต</p></div><div><span class="cost">9 searches</span> <button id="btn-alg" type="button">รัน</button></div></div><div id="out-alg"></div></section>
+<section><div class="sh"><div><h2>7. การค้นหา</h2><p>12 กรณี: ชื่อเต็ม, พิมพ์บางส่วน, พิมพ์ผิด, คำกลางชื่อ, ภาษาไทย (กลางชื่อ/ต้นชื่อ), วรรณยุกต์เกิน, จัดอันดับตามโหวต, เรื่องโหวตน้อยที่ไม่อยู่ใน Algolia — เทียบ Algolia อย่างเดียวกับสิ่งที่ผู้ใช้เห็นจริง</p></div><div><span class="cost">~36 searches</span> <button id="btn-alg" type="button">รัน</button></div></div><div id="out-alg"></div></section>
 <section><div class="sh"><div><h2>8. AI guardrails (Gemini)</h2><p>5 คำถามทดสอบกติกากันแต่งข้อมูลของแชทบอท — ใช้โควตา Gemini 5 ครั้ง จึงไม่รวมในปุ่มรันทั้งหมด</p></div><div><span class="cost">5 Gemini calls</span> <button id="btn-ai" type="button">รัน</button></div></div><div id="out-ai"></div></section>
 <section><div class="sh"><div><h2>สรุปผลสำหรับใส่รายงาน</h2><p>อัปเดตอัตโนมัติหลังรันแต่ละหัวข้อ — คัดลอกไปวางในรายงาน หรือส่งไฟล์ .md / .json กลับมาให้ช่วยสรุปต่อ</p></div></div>
 <textarea id="summary" readonly placeholder="ยังไม่ได้รัน"></textarea>
@@ -50,7 +50,7 @@ textarea{width:100%;min-height:220px;background:#0a1628;color:var(--text);border
 <script type="module">
 const APP_VERSION = "cinemeter-v7_9";
 /* ======== app code — copied verbatim from cinemeter-v7_9.html ======== */
-// ↓ firebaseConfig (cinemeter-v7_9.html line 608)
+// ↓ firebaseConfig (cinemeter-v7_9.html line 618)
 const firebaseConfig = {
             apiKey: "AIzaSyC7n9f_Rr24xcxrspxJcn2bOhITh56TWlE",
             authDomain: "movie-858f6.firebaseapp.com",
@@ -60,56 +60,56 @@ const firebaseConfig = {
             appId: "1:540386516010:web:a16532f6561c83769af753"
         };
 
-// ↓ FS_BASE (cinemeter-v7_9.html line 625)
+// ↓ FS_BASE (cinemeter-v7_9.html line 635)
 const FS_BASE = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents`;
 
-// ↓ FS_TIMEOUT_MS (cinemeter-v7_9.html line 626)
+// ↓ FS_TIMEOUT_MS (cinemeter-v7_9.html line 636)
 const FS_TIMEOUT_MS = 15000;
 
-// ↓ DOC_ID (cinemeter-v7_9.html line 627)
+// ↓ DOC_ID (cinemeter-v7_9.html line 637)
 const DOC_ID = "__name__";
 
-// ↓ db (cinemeter-v7_9.html line 628)
+// ↓ db (cinemeter-v7_9.html line 638)
 const db = { projectId: firebaseConfig.projectId };
 
-// ↓ documentId (cinemeter-v7_9.html line 630)
+// ↓ documentId (cinemeter-v7_9.html line 640)
 const documentId = () => DOC_ID;
 
-// ↓ collection (cinemeter-v7_9.html line 631)
+// ↓ collection (cinemeter-v7_9.html line 641)
 const collection = (_db, name) => ({ kind: "collection", name });
 
-// ↓ doc (cinemeter-v7_9.html line 632)
+// ↓ doc (cinemeter-v7_9.html line 642)
 const doc = (_db, col, id) => ({ kind: "doc", path: `${col}/${id}` });
 
-// ↓ where (cinemeter-v7_9.html line 633)
+// ↓ where (cinemeter-v7_9.html line 643)
 const where = (field, op, value) => ({ type: "where", field, op, value });
 
-// ↓ orderBy (cinemeter-v7_9.html line 634)
+// ↓ orderBy (cinemeter-v7_9.html line 644)
 const orderBy = (field, dir = "asc") => ({ type: "orderBy", field, dir });
 
-// ↓ limit (cinemeter-v7_9.html line 635)
+// ↓ limit (cinemeter-v7_9.html line 645)
 const limit = n => ({ type: "limit", n });
 
-// ↓ startAt (cinemeter-v7_9.html line 636)
+// ↓ startAt (cinemeter-v7_9.html line 646)
 const startAt = (...values) => ({ type: "start", values, before: true });
 
-// ↓ startAfter (cinemeter-v7_9.html line 637)
+// ↓ startAfter (cinemeter-v7_9.html line 647)
 const startAfter = (...values) => ({ type: "start", values, before: false });
 
-// ↓ endAt (cinemeter-v7_9.html line 638)
+// ↓ endAt (cinemeter-v7_9.html line 648)
 const endAt = (...values) => ({ type: "end", values, before: false });
 
-// ↓ query (cinemeter-v7_9.html line 639)
+// ↓ query (cinemeter-v7_9.html line 649)
 const query = (col, ...parts) => ({ col, parts });
 
-// ↓ OP_MAP (cinemeter-v7_9.html line 641)
+// ↓ OP_MAP (cinemeter-v7_9.html line 651)
 const OP_MAP = {
             "==": "EQUAL", "!=": "NOT_EQUAL", "<": "LESS_THAN", "<=": "LESS_THAN_OR_EQUAL",
             ">": "GREATER_THAN", ">=": "GREATER_THAN_OR_EQUAL", "in": "IN", "not-in": "NOT_IN",
             "array-contains": "ARRAY_CONTAINS", "array-contains-any": "ARRAY_CONTAINS_ANY"
         };
 
-// ↓ toFsValue (cinemeter-v7_9.html line 647)
+// ↓ toFsValue (cinemeter-v7_9.html line 657)
 function toFsValue(v) {
             if (v === null || v === undefined) return { nullValue: null };
             if (typeof v === "boolean") return { booleanValue: v };
@@ -124,7 +124,7 @@ function toFsValue(v) {
             return { stringValue: String(v) };
         }
 
-// ↓ fromFsValue (cinemeter-v7_9.html line 661)
+// ↓ fromFsValue (cinemeter-v7_9.html line 671)
 function fromFsValue(v) {
             if (!v) return null;
             if ("stringValue" in v) return v.stringValue;
@@ -141,17 +141,17 @@ function fromFsValue(v) {
             return null;
         }
 
-// ↓ fromFsFields (cinemeter-v7_9.html line 677)
+// ↓ fromFsFields (cinemeter-v7_9.html line 687)
 function fromFsFields(fields) {
             const out = {};
             Object.entries(fields || {}).forEach(([k, v]) => { out[k] = fromFsValue(v); });
             return out;
         }
 
-// ↓ fieldRef (cinemeter-v7_9.html line 684)
+// ↓ fieldRef (cinemeter-v7_9.html line 694)
 const fieldRef = f => ({ fieldPath: f === DOC_ID || /^[A-Za-z_][A-Za-z0-9_]*$/.test(f) ? f : "`" + String(f).replace(/`/g, "\\`") + "`" });
 
-// ↓ makeSnapshot (cinemeter-v7_9.html line 686)
+// ↓ makeSnapshot (cinemeter-v7_9.html line 696)
 function makeSnapshot(d) {
             const id = d.name.split("/").pop();
             return {
@@ -163,7 +163,7 @@ function makeSnapshot(d) {
             };
         }
 
-// ↓ fsFetch (cinemeter-v7_9.html line 697)
+// ↓ fsFetch (cinemeter-v7_9.html line 707)
 async function fsFetch(url, init = {}) {
             const ctrl = new AbortController();
             const timer = setTimeout(() => ctrl.abort(), FS_TIMEOUT_MS);
@@ -189,7 +189,7 @@ async function fsFetch(url, init = {}) {
             }
         }
 
-// ↓ cursorValues (cinemeter-v7_9.html line 722)
+// ↓ cursorValues (cinemeter-v7_9.html line 732)
 function cursorValues(values, orders, colName) {
             // startAfter(docSnapshot) -> ค่าของทุกฟิลด์ที่ orderBy (รวม __name__)
             if (values.length === 1 && values[0] && values[0]._fields) {
@@ -203,7 +203,7 @@ function cursorValues(values, orders, colName) {
                 : toFsValue(v));
         }
 
-// ↓ buildStructuredQuery (cinemeter-v7_9.html line 735)
+// ↓ buildStructuredQuery (cinemeter-v7_9.html line 745)
 function buildStructuredQuery(q) {
             const colName = q.col.name;
             const sq = { from: [{ collectionId: colName }] };
@@ -241,7 +241,7 @@ function buildStructuredQuery(q) {
             return sq;
         }
 
-// ↓ getDocs (cinemeter-v7_9.html line 772)
+// ↓ getDocs (cinemeter-v7_9.html line 782)
 async function getDocs(q) {
             const body = await fsFetch(`${FS_BASE}:runQuery`, {
                 method: "POST",
@@ -251,7 +251,7 @@ async function getDocs(q) {
             return { docs, size: docs.length, empty: docs.length === 0 };
         }
 
-// ↓ getDoc (cinemeter-v7_9.html line 781)
+// ↓ getDoc (cinemeter-v7_9.html line 791)
 async function getDoc(ref) {
             const path = ref.path.split("/").map(encodeURIComponent).join("/");
             try {
@@ -263,32 +263,32 @@ async function getDoc(ref) {
             }
         }
 
-// ↓ GEMINI_PROXY (cinemeter-v7_9.html line 796)
+// ↓ GEMINI_PROXY (cinemeter-v7_9.html line 806)
 const GEMINI_PROXY = "https://asia-southeast1-movie-858f6.cloudfunctions.net/gemini";
 
-// ↓ GEMINI_PRIMARY_MODEL (cinemeter-v7_9.html line 797)
+// ↓ GEMINI_PRIMARY_MODEL (cinemeter-v7_9.html line 807)
 const GEMINI_PRIMARY_MODEL = "gemini-3.1-flash-lite";
 
-// ↓ GEMINI_FALLBACK_MODELS (cinemeter-v7_9.html line 798)
-const GEMINI_FALLBACK_MODELS = ["gemini-3.1-flash-lite-preview", "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"];
+// ↓ GEMINI_FALLBACK_MODELS (cinemeter-v7_9.html line 809)
+const GEMINI_FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite-preview", "gemini-3.6-flash"];
 
-// ↓ ALGOLIA (cinemeter-v7_9.html line 806)
+// ↓ ALGOLIA (cinemeter-v7_9.html line 818)
 const ALGOLIA = {
             appId: "GZASG6MLUC",
             searchKey: "a86e1af2a9df7f4d192e6125caa9e07a",   // Search-Only API Key
             indexName: "firebase_movies_1980_2026"
         };
 
-// ↓ algoliaReady (cinemeter-v7_9.html line 811)
+// ↓ algoliaReady (cinemeter-v7_9.html line 823)
 const algoliaReady = () => !!(ALGOLIA.appId && ALGOLIA.searchKey && ALGOLIA.indexName);
 
-// ↓ PAGE_SIZE (cinemeter-v7_9.html line 813)
+// ↓ PAGE_SIZE (cinemeter-v7_9.html line 825)
 const PAGE_SIZE = 40;
 
-// ↓ ALGOLIA_MAX_FILTER_PAGES (cinemeter-v7_9.html line 818)
+// ↓ ALGOLIA_MAX_FILTER_PAGES (cinemeter-v7_9.html line 830)
 const ALGOLIA_MAX_FILTER_PAGES = 5;
 
-// ↓ SD_RULES (cinemeter-v7_9.html line 833)
+// ↓ SD_RULES (cinemeter-v7_9.html line 845)
 const SD_RULES = {
             agreeGap: 1.0,           // ค่าเฉลี่ยคนดูกับนักวิจารณ์ห่างกันไม่เกินนี้ (คะแนนเต็ม 10) = ความเห็นตรงกัน
             equalTol: 0.15,          // S.D. สองฝั่งต่างกันไม่เกินนี้ = แหล่งคะแนนแต่ละฝั่งน่าเชื่อพอ ๆ กัน
@@ -296,52 +296,52 @@ const SD_RULES = {
             overallHighRatio: 1.50   // หรือสูงกว่าค่า S.D. เฉลี่ยของหมวดกี่เท่า
         };
 
-// ↓ targetCollection (cinemeter-v7_9.html line 843)
+// ↓ targetCollection (cinemeter-v7_9.html line 855)
 let targetCollection = "MOVIES";
 
-// ↓ collectionResolved (cinemeter-v7_9.html line 844)
+// ↓ collectionResolved (cinemeter-v7_9.html line 856)
 let collectionResolved = false;
 
-// ↓ latestYear (cinemeter-v7_9.html line 845)
+// ↓ latestYear (cinemeter-v7_9.html line 857)
 let latestYear = 2026;
 
-// ↓ VOTE_KEYS (cinemeter-v7_9.html line 847)
+// ↓ VOTE_KEYS (cinemeter-v7_9.html line 859)
 const VOTE_KEYS = ["imdbVotesNum", "imdbVotes", "imdbvotes", "imdb_votes", "IMDb_Votes", "Votes"];
 
-// ↓ POPULARITY_KEYS (cinemeter-v7_9.html line 848)
+// ↓ POPULARITY_KEYS (cinemeter-v7_9.html line 860)
 const POPULARITY_KEYS = ["Popularity", "popularity", "tmdbPopularity"];
 
-// ↓ TMDBID_KEYS (cinemeter-v7_9.html line 849)
+// ↓ TMDBID_KEYS (cinemeter-v7_9.html line 861)
 const TMDBID_KEYS = ["tmdbID", "tmdbId", "TmdbID", "tmdb_id", "tmdbid"];
 
-// ↓ KEYWORD_KEYS (cinemeter-v7_9.html line 850)
+// ↓ KEYWORD_KEYS (cinemeter-v7_9.html line 862)
 const KEYWORD_KEYS = ["Keywords", "keywords", "Keyword", "keyword"];
 
-// ↓ MEDIATYPE_KEYS (cinemeter-v7_9.html line 851)
+// ↓ MEDIATYPE_KEYS (cinemeter-v7_9.html line 863)
 const MEDIATYPE_KEYS = ["MediaType", "mediaType", "Type", "media_type"];
 
-// ↓ votesField (cinemeter-v7_9.html line 853)
+// ↓ votesField (cinemeter-v7_9.html line 865)
 let votesField = null;
 
-// ↓ mediaField (cinemeter-v7_9.html line 854)
+// ↓ mediaField (cinemeter-v7_9.html line 866)
 let mediaField = null;
 
-// ↓ mediaServerFilter (cinemeter-v7_9.html line 855)
+// ↓ mediaServerFilter (cinemeter-v7_9.html line 867)
 let mediaServerFilter = false;
 
-// ↓ votesNumeric (cinemeter-v7_9.html line 856)
+// ↓ votesNumeric (cinemeter-v7_9.html line 868)
 let votesNumeric = false;
 
-// ↓ hasPopularityField (cinemeter-v7_9.html line 857)
+// ↓ hasPopularityField (cinemeter-v7_9.html line 869)
 let hasPopularityField = true;
 
-// ↓ hasScoreFields (cinemeter-v7_9.html line 858)
+// ↓ hasScoreFields (cinemeter-v7_9.html line 870)
 let hasScoreFields = false;
 
-// ↓ loadedMovies (cinemeter-v7_9.html line 860)
+// ↓ loadedMovies (cinemeter-v7_9.html line 872)
 let loadedMovies = [];
 
-// ↓ VALUE_LABELS (cinemeter-v7_9.html line 875)
+// ↓ VALUE_LABELS (cinemeter-v7_9.html line 887)
 const VALUE_LABELS = {
             genre: {
                 "บู๊": "Action", "ผจญ": "Adventure", "แอนนิเมชั่น": "Animation",
@@ -366,7 +366,7 @@ const VALUE_LABELS = {
             }
         };
 
-// ↓ toNum (cinemeter-v7_9.html line 902)
+// ↓ toNum (cinemeter-v7_9.html line 914)
 function toNum(v) {
             if (v === null || v === undefined) return 0;
             if (typeof v === "number") return isFinite(v) ? v : 0;
@@ -374,7 +374,7 @@ function toNum(v) {
             return isFinite(n) ? n : 0;
         }
 
-// ↓ toNumOrNull (cinemeter-v7_9.html line 909)
+// ↓ toNumOrNull (cinemeter-v7_9.html line 921)
 function toNumOrNull(v) {
             if (v === null || v === undefined) return null;
             if (typeof v === "number") return isFinite(v) ? v : null;
@@ -384,7 +384,7 @@ function toNumOrNull(v) {
             return isFinite(n) ? n : null;
         }
 
-// ↓ pickField (cinemeter-v7_9.html line 918)
+// ↓ pickField (cinemeter-v7_9.html line 930)
 function pickField(obj, keys) {
             if (!obj) return undefined;
             for (const k of keys) {
@@ -394,23 +394,23 @@ function pickField(obj, keys) {
             return undefined;
         }
 
-// ↓ getVotes (cinemeter-v7_9.html line 927)
+// ↓ getVotes (cinemeter-v7_9.html line 939)
 function getVotes(m) {
             if (!m) return 0;
             if (votesField && m[votesField] !== undefined) return toNum(m[votesField]);
             return toNum(pickField(m, VOTE_KEYS));
         }
 
-// ↓ getPopularity (cinemeter-v7_9.html line 933)
+// ↓ getPopularity (cinemeter-v7_9.html line 945)
 function getPopularity(m) { return toNum(pickField(m, POPULARITY_KEYS)); }
 
-// ↓ getMediaType (cinemeter-v7_9.html line 935)
+// ↓ getMediaType (cinemeter-v7_9.html line 947)
 function getMediaType(m) { return String(pickField(m, MEDIATYPE_KEYS) || ""); }
 
-// ↓ isSeries (cinemeter-v7_9.html line 936)
+// ↓ isSeries (cinemeter-v7_9.html line 948)
 function isSeries(m) { return /ซีรี|series|tv/i.test(getMediaType(m)); }
 
-// ↓ getKeywords (cinemeter-v7_9.html line 939)
+// ↓ getKeywords (cinemeter-v7_9.html line 951)
 function getKeywords(m) {
             const raw = pickField(m, KEYWORD_KEYS);
             if (raw === undefined) return [];
@@ -418,7 +418,7 @@ function getKeywords(m) {
             return String(raw).split(/[,|/;]/).map(s => s.trim()).filter(Boolean);
         }
 
-// ↓ getYear (cinemeter-v7_9.html line 946)
+// ↓ getYear (cinemeter-v7_9.html line 958)
 function getYear(m) {
             if (!m) return 0;
             const raw = String(m.Year ?? m.year ?? "");
@@ -426,7 +426,7 @@ function getYear(m) {
             return match ? parseInt(match[0], 10) : 0;
         }
 
-// ↓ formatVotes (cinemeter-v7_9.html line 953)
+// ↓ formatVotes (cinemeter-v7_9.html line 965)
 function formatVotes(n) {
             if (!n) return "";
             if (n >= 999500) return (n / 1000000).toFixed(1).replace(/\.0$/, "") + "M";   // 999,500+ ปัดแล้วเป็น 1M ไม่ใช่ 1000K
@@ -434,7 +434,7 @@ function formatVotes(n) {
             return String(n);
         }
 
-// ↓ getEnglishTitle (cinemeter-v7_9.html line 960)
+// ↓ getEnglishTitle (cinemeter-v7_9.html line 972)
 function getEnglishTitle(m) {
             if (!m) return "Untitled";
             let t = m.Title_EN || m.Title || "Untitled";
@@ -446,13 +446,13 @@ function getEnglishTitle(m) {
             return t || m.Title || "Untitled";
         }
 
-// ↓ getThaiTitle (cinemeter-v7_9.html line 971)
+// ↓ getThaiTitle (cinemeter-v7_9.html line 983)
 function getThaiTitle(m) {
             if (!m) return "";
             return m.Title_TH || m.Title_th || m.TitleTH || m.title_th || "";
         }
 
-// ↓ docToMovie (cinemeter-v7_9.html line 976)
+// ↓ docToMovie (cinemeter-v7_9.html line 988)
 function docToMovie(d) {
             const data = d.data();
             data.id = d.id;
@@ -461,10 +461,10 @@ function docToMovie(d) {
             return data;
         }
 
-// ↓ idLooksImdb (cinemeter-v7_9.html line 988)
+// ↓ idLooksImdb (cinemeter-v7_9.html line 1000)
 let idLooksImdb = false;
 
-// ↓ randomDocId (cinemeter-v7_9.html line 989)
+// ↓ randomDocId (cinemeter-v7_9.html line 1001)
 function randomDocId() {
             // สุ่มให้อยู่ในรูปแบบเดียวกับ ID จริง: ถ้าสุ่มตัวอักษรทั่วไป จุดเริ่มจะตกก่อน/หลังช่วง "tt..." เกือบทุกครั้ง ได้หนังชุดแรกซ้ำเดิม
             if (idLooksImdb) return "tt" + String(Math.floor(Math.random() * 1e7)).padStart(7, "0");
@@ -474,12 +474,12 @@ function randomDocId() {
             return out;
         }
 
-// ↓ yearInValues (cinemeter-v7_9.html line 1000)
+// ↓ yearInValues (cinemeter-v7_9.html line 1012)
 function yearInValues(years) {
             return years.map(y => String(y)).slice(0, 30);
         }
 
-// ↓ GENRE_VARIANTS (cinemeter-v7_9.html line 1009)
+// ↓ GENRE_VARIANTS (cinemeter-v7_9.html line 1021)
 const GENRE_VARIANTS = {
             "บู๊": ["บู๊", "บู๊, ผจญภัย"],
             "ผจญ": ["ผจญ", "บู๊, ผจญภัย"],
@@ -507,26 +507,26 @@ const GENRE_VARIANTS = {
             "เพลง": ["ดนตรี"]
         };
 
-// ↓ genreValues (cinemeter-v7_9.html line 1036)
+// ↓ genreValues (cinemeter-v7_9.html line 1048)
 function genreValues(menuValue) {
             return menuValue ? (GENRE_VARIANTS[menuValue] || [menuValue]) : [];
         }
 
-// ↓ GENRE_CANONICAL (cinemeter-v7_9.html line 1046)
+// ↓ GENRE_CANONICAL (cinemeter-v7_9.html line 1058)
 const GENRE_CANONICAL = { "โรแมนติก": "หนังรักโรแมนติก", "เพลง": "ดนตรี" };
 
-// ↓ GENRE_DISPLAY_TH (cinemeter-v7_9.html line 1047)
+// ↓ GENRE_DISPLAY_TH (cinemeter-v7_9.html line 1059)
 const GENRE_DISPLAY_TH = { "ผจญ": "ผจญภัย", "บทสนทนา": "ทอล์กโชว์/ข่าว" };
 
-// ↓ genresArrayReady (cinemeter-v7_9.html line 1048)
+// ↓ genresArrayReady (cinemeter-v7_9.html line 1060)
 let genresArrayReady = false;
 
-// ↓ canonicalGenre (cinemeter-v7_9.html line 1050)
+// ↓ canonicalGenre (cinemeter-v7_9.html line 1062)
 function canonicalGenre(menuValue) {
             return GENRE_CANONICAL[menuValue] || menuValue;
         }
 
-// ↓ legacyGenres (cinemeter-v7_9.html line 1055)
+// ↓ legacyGenres (cinemeter-v7_9.html line 1067)
 function legacyGenres(m) {
             const raw = String(m?.Genre_for_cal || "");
             if (!raw) return [];
@@ -535,31 +535,31 @@ function legacyGenres(m) {
             return out.length ? out : [raw];
         }
 
-// ↓ movieGenres (cinemeter-v7_9.html line 1063)
+// ↓ movieGenres (cinemeter-v7_9.html line 1075)
 function movieGenres(m) {
             if (Array.isArray(m?.Genres) && m.Genres.length) return m.Genres;
             return legacyGenres(m);
         }
 
-// ↓ genreLabelTH (cinemeter-v7_9.html line 1068)
+// ↓ genreLabelTH (cinemeter-v7_9.html line 1080)
 function genreLabelTH(g) {
             return GENRE_DISPLAY_TH[g] || g;
         }
 
-// ↓ genreDisplay (cinemeter-v7_9.html line 1072)
+// ↓ genreDisplay (cinemeter-v7_9.html line 1084)
 function genreDisplay(m) {
             const list = movieGenres(m);
             return list.length ? list.map(genreLabelTH).join(", ") : (m?.Genre || "");
         }
 
-// ↓ genreWhere (cinemeter-v7_9.html line 1077)
+// ↓ genreWhere (cinemeter-v7_9.html line 1089)
 function genreWhere(menuValue) {
             if (genresArrayReady) return where("Genres", "array-contains", canonicalGenre(menuValue));
             const vals = genreValues(menuValue);
             return vals.length === 1 ? where("Genre_for_cal", "==", vals[0]) : where("Genre_for_cal", "in", vals);
         }
 
-// ↓ yearsFromFilter (cinemeter-v7_9.html line 1083)
+// ↓ yearsFromFilter (cinemeter-v7_9.html line 1095)
 function yearsFromFilter(val) {
             if (!val) return null;
             if (/^\d{4}$/.test(val)) return [parseInt(val, 10)];
@@ -571,7 +571,7 @@ function yearsFromFilter(val) {
             return null;
         }
 
-// ↓ matchesGenre (cinemeter-v7_9.html line 1100)
+// ↓ matchesGenre (cinemeter-v7_9.html line 1112)
 function matchesGenre(m, filterGenre) {
             if (!filterGenre) return true;
             if (Array.isArray(m.Genres) && m.Genres.length) return m.Genres.includes(canonicalGenre(filterGenre));
@@ -586,13 +586,13 @@ function matchesGenre(m, filterGenre) {
                    (targetEng && gFull.includes(targetEng));
         }
 
-// ↓ matchesMedia (cinemeter-v7_9.html line 1114)
+// ↓ matchesMedia (cinemeter-v7_9.html line 1126)
 function matchesMedia(m, filterMedia) {
             if (!filterMedia) return true;
             return /ซีรี/.test(filterMedia) ? isSeries(m) : !isSeries(m);
         }
 
-// ↓ passesFilters (cinemeter-v7_9.html line 1121)
+// ↓ passesFilters (cinemeter-v7_9.html line 1133)
 function passesFilters(m, f = activeFilters) {
             if (!matchesGenre(m, f.genre)) return false;
             if (!matchesMedia(m, f.media)) return false;
@@ -601,12 +601,12 @@ function passesFilters(m, f = activeFilters) {
             return true;
         }
 
-// ↓ hasClientFilters (cinemeter-v7_9.html line 1129)
+// ↓ hasClientFilters (cinemeter-v7_9.html line 1141)
 function hasClientFilters(f) {
             return !!(f.genre || f.year || f.media);
         }
 
-// ↓ detectValidCollection (cinemeter-v7_9.html line 1144)
+// ↓ detectValidCollection (cinemeter-v7_9.html line 1156)
 async function detectValidCollection() {
             if (collectionResolved) return targetCollection;
             const candidates = ["MOVIES", "movies", "movie", "Movies"];
@@ -627,7 +627,7 @@ async function detectValidCollection() {
             return "MOVIES";
         }
 
-// ↓ detectSchema (cinemeter-v7_9.html line 1164)
+// ↓ detectSchema (cinemeter-v7_9.html line 1176)
 function detectSchema(samples) {
             const tally = {};
             samples.forEach(d => {
@@ -659,7 +659,7 @@ function detectSchema(samples) {
                 .every(d => d[mediaField] === "ภาพยนตร์" || d[mediaField] === "ซีรีส์");
         }
 
-// ↓ detectGenresArray (cinemeter-v7_9.html line 1195)
+// ↓ detectGenresArray (cinemeter-v7_9.html line 1207)
 async function detectGenresArray() {
             try {
                 const meta = await getDoc(doc(db, "META", "genres"));
@@ -667,7 +667,7 @@ async function detectGenresArray() {
             } catch (e) { genresArrayReady = false; }
         }
 
-// ↓ detectLatestYear (cinemeter-v7_9.html line 1202)
+// ↓ detectLatestYear (cinemeter-v7_9.html line 1214)
 async function detectLatestYear() {
             try {
                 const snap = await getDocs(query(collection(db, targetCollection), orderBy("Year", "desc"), limit(25)));
@@ -681,18 +681,18 @@ async function detectLatestYear() {
             } catch (e) { }
         }
 
-// ↓ THAI_CHAR (cinemeter-v7_9.html line 1247)
+// ↓ THAI_CHAR (cinemeter-v7_9.html line 1259)
 const THAI_CHAR = /[\u0E00-\u0E7F]/;
 
-// ↓ THAI_TONE_MARKS (cinemeter-v7_9.html line 1248)
+// ↓ THAI_TONE_MARKS (cinemeter-v7_9.html line 1260)
 const THAI_TONE_MARKS = /[\u0E48-\u0E4B]/g;
 
-// ↓ stripThaiTones (cinemeter-v7_9.html line 1249)
+// ↓ stripThaiTones (cinemeter-v7_9.html line 1261)
 function stripThaiTones(s) {
             return String(s || "").replace(THAI_TONE_MARKS, "");
         }
 
-// ↓ algoliaQuery (cinemeter-v7_9.html line 1253)
+// ↓ algoliaQuery (cinemeter-v7_9.html line 1265)
 async function algoliaQuery(params) {
             const url = `https://${ALGOLIA.appId}-dsn.algolia.net/1/indexes/${encodeURIComponent(ALGOLIA.indexName)}/query`;
             const res = await fetch(url, {
@@ -713,7 +713,7 @@ async function algoliaQuery(params) {
             return res.json();
         }
 
-// ↓ searchAlgolia (cinemeter-v7_9.html line 1273)
+// ↓ searchAlgolia (cinemeter-v7_9.html line 1285)
 async function searchAlgolia(term, page = 0, hitsPerPage = PAGE_SIZE) {
             const isThai = THAI_CHAR.test(term);
             const base = { hitsPerPage, page, ...(isThai ? { queryType: "prefixAll" } : {}) };
@@ -735,12 +735,12 @@ async function searchAlgolia(term, page = 0, hitsPerPage = PAGE_SIZE) {
             return { movies, page: data.page, nbPages: data.nbPages };
         }
 
-// ↓ normTitle (cinemeter-v7_9.html line 1296)
+// ↓ normTitle (cinemeter-v7_9.html line 1308)
 function normTitle(s) {
             return stripThaiTones(String(s || "").toLowerCase()).replace(/[^\p{L}\p{N}\p{M}]+/gu, " ").trim();
         }
 
-// ↓ titleMatchTier (cinemeter-v7_9.html line 1299)
+// ↓ titleMatchTier (cinemeter-v7_9.html line 1311)
 function titleMatchTier(m, term) {
             const q = normTitle(term);
             if (!q) return 0;
@@ -748,7 +748,7 @@ function titleMatchTier(m, term) {
             return titles.some(t => t.includes(q)) ? 1 : 0;
         }
 
-// ↓ sortSearchHits (cinemeter-v7_9.html line 1305)
+// ↓ sortSearchHits (cinemeter-v7_9.html line 1317)
 function sortSearchHits(movies, term) {
             return movies
                 .map((m, i) => ({ m, i, tier: titleMatchTier(m, term), votes: getVotes(m) }))
@@ -756,7 +756,32 @@ function sortSearchHits(movies, term) {
                 .map(x => x.m);
         }
 
-// ↓ loadSearch (cinemeter-v7_9.html line 1312)
+// ↓ SEARCH_PREFIX_EXTRA (cinemeter-v7_9.html line 1326)
+const SEARCH_PREFIX_EXTRA = 5;
+
+// ↓ firestorePrefix (cinemeter-v7_9.html line 1327)
+async function firestorePrefix(raw, cursor, size, primaryOnly = false) {
+            const col = collection(db, targetCollection);
+            const isThai = /[\u0E00-\u0E7F]/.test(raw);
+            const searchFields = primaryOnly ? [isThai ? "Title_TH" : "Title_EN"]   // เติมผล Algolia: อ่าน Firestore ให้น้อยที่สุด
+                : isThai ? ["Title_TH", "Title_th", "title_th", "TitleTH", "Title"] : ["Title_EN", "Title"];
+            const titleCase = raw.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase());   // "i feel you" → "I Feel You"
+            const variants = isThai ? [raw] : [...new Set([raw.charAt(0).toUpperCase() + raw.slice(1), titleCase, raw, raw.toUpperCase()])];
+            for (const field of searchFields) {
+                for (const v of variants) {
+                    try {
+                        const parts = [orderBy(field), startAt(v), endAt(v + "\uf8ff")];
+                        if (cursor && cursor.id) parts.push(startAfter(cursor));
+                        parts.push(limit(size));
+                        const res = await getDocs(query(col, ...parts));
+                        if (res.docs.length) return res;
+                    } catch (e) { }
+                }
+            }
+            return { docs: [] };
+        }
+
+// ↓ loadSearch (cinemeter-v7_9.html line 1348)
 async function loadSearch(term, cursor, f = snapshotFilters()) {
             await detectValidCollection();
             const raw = term.trim();
@@ -771,6 +796,10 @@ async function loadSearch(term, cursor, f = snapshotFilters()) {
                     const perPage = filtering ? 100 : PAGE_SIZE;
                     const maxPages = filtering ? ALGOLIA_MAX_FILTER_PAGES : 1;
                     let movies = [], nbPages = 0, scanned = 0;
+                    // หน้าแรก: ค้นชื่อขึ้นต้นใน Firestore ไปพร้อมกัน เผื่อเรื่องที่ไม่อยู่ใน Algolia
+                    const extraP = page === 0
+                        ? firestorePrefix(raw, null, SEARCH_PREFIX_EXTRA, true).then(s => s.docs.map(docToMovie)).catch(() => [])
+                        : Promise.resolve([]);
                     do {
                         const res = await searchAlgolia(raw, page, perPage);
                         nbPages = res.nbPages;
@@ -778,6 +807,9 @@ async function loadSearch(term, cursor, f = snapshotFilters()) {
                         page = res.page + 1;
                         scanned++;
                     } while (movies.length < PAGE_SIZE && page < nbPages && scanned < maxPages);
+                    const have = new Set(movies.map(m => m.id));
+                    const extra = (await extraP).filter(m => m.Poster && !have.has(m.id) && passesFilters(m, f));
+                    if (extra.length) movies = sortSearchHits([...extra, ...movies], raw);
                     return {
                         movies,
                         cursor: page < nbPages ? page : null,
@@ -789,8 +821,6 @@ async function loadSearch(term, cursor, f = snapshotFilters()) {
             }
 
             // ---- 2) Fallback: prefix search ของ Firestore + ค้นในหน้าที่โหลดแล้ว ----
-            const col = collection(db, targetCollection);
-            const isThai = /[\u0E00-\u0E7F]/.test(raw);
             const lower = raw.toLowerCase();
 
             let inMemoryMatches = [];
@@ -802,22 +832,7 @@ async function loadSearch(term, cursor, f = snapshotFilters()) {
                 });
             }
 
-            const searchFields = isThai ? ["Title_TH", "Title_th", "title_th", "TitleTH", "Title"] : ["Title_EN", "Title"];
-            const variants = isThai ? [raw] : [raw.charAt(0).toUpperCase() + raw.slice(1), raw, raw.toUpperCase()];
-            let snap = { docs: [] };
-
-            outer:
-            for (const f of searchFields) {
-                for (const v of variants) {
-                    try {
-                        const parts = [orderBy(f), startAt(v), endAt(v + "\uf8ff")];
-                        if (cursor && cursor.id) parts.push(startAfter(cursor));
-                        parts.push(limit(PAGE_SIZE));
-                        const res = await getDocs(query(col, ...parts));
-                        if (res.docs.length) { snap = res; break outer; }
-                    } catch (e) { }
-                }
-            }
+            const snap = await firestorePrefix(raw, cursor, PAGE_SIZE);
 
             let movies = (snap.docs || []).map(docToMovie);
             if (inMemoryMatches.length) {
@@ -834,7 +849,7 @@ async function loadSearch(term, cursor, f = snapshotFilters()) {
             };
         }
 
-// ↓ decideTrustSide (cinemeter-v7_9.html line 2390)
+// ↓ decideTrustSide (cinemeter-v7_9.html line 2648)
 function decideTrustSide(v) {
             const { overall, genreAudience, genreCritics } = v;
             let critics = v.critics, audience = v.audience;
@@ -885,18 +900,20 @@ function decideTrustSide(v) {
                 : { text: "เชื่อฝั่งคนดู", tone: "audience", note };
         }
 
-// ↓ GEMINI_URL (cinemeter-v7_9.html line 2953)
+// ↓ GEMINI_URL (cinemeter-v7_9.html line 3314)
 const GEMINI_URL = m => `${GEMINI_PROXY}/models/${m}:generateContent`;
 
-// ↓ geminiModel (cinemeter-v7_9.html line 2954)
+// ↓ geminiModel (cinemeter-v7_9.html line 3315)
 let geminiModel = GEMINI_PRIMARY_MODEL;
 
-// ↓ callGemini (cinemeter-v7_9.html line 2958)
+// ↓ callGemini (cinemeter-v7_9.html line 3319)
 async function callGemini({ system, contents, json = false, temperature = 0.7, maxTokens = 1000 }) {
             const models = [geminiModel, ...GEMINI_FALLBACK_MODELS.filter(m => m !== geminiModel)];
             let lastErr = null;
 
-            for (const model of models) {
+            const retried = new Set();
+            for (let i = 0; i < models.length; i++) {
+                const model = models[i];
                 try {
                     const res = await fetch(GEMINI_URL(model), {
                         method: "POST",
@@ -913,8 +930,16 @@ async function callGemini({ system, contents, json = false, temperature = 0.7, m
 
                     if (!res.ok) {
                         lastErr = new Error(`${model}: ${res.status}`);
-                        if (res.status === 404 || res.status === 400) continue;
-                        throw lastErr;
+                        lastErr.status = res.status;
+                        const body = res.status === 429 && res.text ? await res.text().catch(() => "") : "";
+                        // 429 จาก Cloud Function = เกิน 20 ครั้ง/นาที ลองรุ่นอื่นก็โดนเหมือนกัน → หยุดเลย
+                        if (/too many requests/i.test(body)) { lastErr.fatal = true; throw lastErr; }
+                        if ((res.status === 500 || res.status === 503) && !retried.has(model)) {
+                            retried.add(model);
+                            await new Promise(r => setTimeout(r, GEMINI_RETRY_MS));
+                            models.splice(i + 1, 0, model);
+                        }
+                        continue;   // 400/404/429 โควตา/5xx → รุ่นถัดไป (โควตาฟรีนับแยกต่อรุ่น)
                     }
 
                     const data = await res.json();
@@ -922,13 +947,14 @@ async function callGemini({ system, contents, json = false, temperature = 0.7, m
                     const parts = data?.candidates?.[0]?.content?.parts || [];
                     return parts.map(p => p.text || "").join("").trim();
                 } catch (err) {
+                    if (err.fatal) throw err;
                     lastErr = err;
                 }
             }
             throw lastErr || new Error("Gemini request failed");
         }
 
-// ↓ parseJsonLoose (cinemeter-v7_9.html line 2994)
+// ↓ parseJsonLoose (cinemeter-v7_9.html line 3366)
 function parseJsonLoose(text) {
             if (!text) return null;
             const cleaned = text.replace(/```json|```/g, "").trim();
@@ -938,7 +964,7 @@ function parseJsonLoose(text) {
             return null;
         }
 
-// ↓ CHAT_SYSTEM_PROMPT (cinemeter-v7_9.html line 3035)
+// ↓ CHAT_SYSTEM_PROMPT (cinemeter-v7_9.html line 3432)
 const CHAT_SYSTEM_PROMPT = `คุณคือ "CineMeter Assistant" ผู้เชี่ยวชาญด้านภาพยนตร์และซีรีส์ระดับนักวิจารณ์มืออาชีพ
 มีความรู้กว้างทั้งประวัติศาสตร์ภาพยนตร์ ผู้กำกับ นักแสดง เทคนิคการถ่ายทำ การเล่าเรื่อง แนวหนัง รางวัล และวงการสตรีมมิง
 คุณตอบคำถามนอกสคริปต์ได้เสมอด้วยความรู้ของตัวเอง อย่างเป็นกันเองและมีสาระ
@@ -968,13 +994,13 @@ const CHAT_SYSTEM_PROMPT = `คุณคือ "CineMeter Assistant" ผู้�
 
 ตอบเป็น JSON เท่านั้น: {"reply":"ข้อความ","picks":["docId"]}`;
 
-// ↓ roundOrNull (cinemeter-v7_9.html line 3064)
+// ↓ roundOrNull (cinemeter-v7_9.html line 3461)
 function roundOrNull(v, d = 2) {
             const n = toNumOrNull(v);
             return n === null ? null : Number(n.toFixed(d));
         }
 
-// ↓ compactMovie (cinemeter-v7_9.html line 3127)
+// ↓ compactMovie (cinemeter-v7_9.html line 3524)
 function compactMovie(m) {
             return {
                 id: m.id,
@@ -990,12 +1016,13 @@ function compactMovie(m) {
                 overallSD: toNumOrNull(m.Overall_SD),
                 recommendSide: m.Recommended_Trust_Side || null,
                 votes: getVotes(m) || null,
+                language: getLanguage(m) || null,
                 keywords: getKeywords(m).slice(0, 8),
                 plot: m.Plot ? String(m.Plot).slice(0, 180) : null
             };
         }
 
-// ↓ buildChatPrompt (cinemeter-v7_9.html line 3151)
+// ↓ buildChatPrompt (cinemeter-v7_9.html line 3549)
 function buildChatPrompt({ userText, currentMovie = null, candidates = [], history = [] }) {
             const blocks = [
                 `[CURRENT_MOVIE]\n${currentMovie ? JSON.stringify(currentMovie) : "none (ผู้ใช้ไม่ได้เปิดดูหนังเรื่องใดอยู่)"}`,
@@ -1009,11 +1036,12 @@ function buildChatPrompt({ userText, currentMovie = null, candidates = [], histo
             const turns = [];
             history.forEach(h => {
                 const role = h.role === "user" ? "user" : "model";
+                const text = h.picks && h.picks.length ? `${h.text}\n[แนะนำ: ${h.picks.join(", ")}]` : h.text;
                 if (!turns.length && role !== "user") return;
                 if (turns.length && turns[turns.length - 1].role === role) {
-                    turns[turns.length - 1].parts[0].text += "\n" + h.text;
+                    turns[turns.length - 1].parts[0].text += "\n" + text;
                 } else {
-                    turns.push({ role, parts: [{ text: h.text }] });
+                    turns.push({ role, parts: [{ text }] });
                 }
             });
             if (turns.length && turns[turns.length - 1].role === "user") turns.pop();
@@ -1024,7 +1052,7 @@ function buildChatPrompt({ userText, currentMovie = null, candidates = [], histo
             };
         }
 
-// ↓ extractReply (cinemeter-v7_9.html line 3229)
+// ↓ extractReply (cinemeter-v7_9.html line 3695)
 function extractReply(raw) {
             const parsed = parseJsonLoose(raw);
             if (parsed?.reply) return parsed;
@@ -1178,7 +1206,7 @@ async function runCompleteness() {
       ["Title_EN", "text"], ["Title_TH", "text"], ["Plot", "text"], ["Poster", "text"], ["Director", "text"], ["Actors", "text"],
       ["imdbRating", "raw"], ["tmdbRating", "raw"], ["TomatoScore", "raw"], ["Metascore", "raw"],
       ["Critics_Average", "num"], ["Audience_Average", "num"], ["Movie_Critics_SD", "num"], ["Movie_Audience_SD", "num"], ["Overall_SD", "num"],
-      ["Popularity", "num"], [vf, "num"], ["tmdbID", "any"], ["Keywords", "any"], ["Genres", "any"], ["Genre_for_cal", "text"], ["MediaType", "text"], ["Recommended_Trust_Side", "text"]];
+      ["Popularity", "num"], [vf, "num"], ["tmdbID", "any"], ["Keyword", "any"], ["Genres", "any"], ["Genre_for_cal", "text"], ["MediaType", "text"], ["Recommended_Trust_Side", "text"]];
     const rows = await pool(FIELDS, 6, async ([f, kind]) => {
       const present = await safeCount(notNull(f));
       const numeric = kind === "num" || kind === "raw" ? await safeCount(ff(f, "GREATER_THAN_OR_EQUAL", -1e12)) : null;
@@ -1402,25 +1430,32 @@ async function runAlgolia() {
       { q: "odysey", re: /odyssey/i, note: "พิมพ์ผิด 1 ตัว" }, { q: "wick", re: /john wick/i, note: "คำกลางชื่อ" },
       { q: "godfathr", re: /godfather/i, note: "พิมพ์ผิด" }, { q: "spider man", re: /spider-?man/i, note: "ไม่มีขีดกลาง" },
       { q: "โอดิส", th: true, note: "ภาษาไทย พิมพ์บางส่วน" }, { q: "โอดิสซี่", th: true, note: "ภาษาไทย มีวรรณยุกต์เกิน" },
-      { q: "avengers", rank: true, note: "เรื่องดังขึ้นก่อน (Custom Ranking)" }];
+      { q: "avengers", rank: true, note: "เรื่องดังขึ้นก่อน (Custom Ranking)" },
+      { q: "มหากาพย์", th: true, note: "ภาษาไทย ต้นชื่อ" },
+      { q: "หอมกลิ่นความรัก", th: true, note: "เรื่องโหวตน้อย (ไม่อยู่ใน Algolia)" },
+      { q: "I Feel You", re: /linger/i, note: "เรื่องโหวตน้อย ชื่ออังกฤษ" }];
+    const NO_FILTER = { genre: "", year: "", media: "", popular: "", search: "" };
     const judge = (c, list, raw) => {
       if (c.rank) { const t = (raw || list).filter(m => /avengers/i.test(getEnglishTitle(m))); return t.length ? getVotes(t[0]) >= Math.max(...t.map(getVotes)) : false; }
       if (c.th) return list.slice(0, 5).some(m => stripThaiTones(String(m.Title_TH || "")).includes(stripThaiTones(c.q).slice(0, 4)));
       return list.slice(0, 5).some(m => c.re.test(getEnglishTitle(m)));
     };
-    const rows = []; let pass = 0, passPrefix = 0;
+    const rows = []; let pass = 0, passPrefix = 0, passUser = 0;
     for (const c of CASES) {
       const [res, ms] = await timed(() => searchAlgolia(c.q, 0, 20));
       const sorted = sortSearchHits(res.movies, c.q);
       const ok = judge(c, sorted, res.movies);
       let okP = null; try { const pm = await prefixSearch(c.q); okP = judge(c, pm, pm); } catch (e) { okP = null; }
-      if (ok) pass++; if (okP) passPrefix++;
-      rows.push([esc(c.q), esc(c.note), badge(okP), badge(ok), esc(sorted.slice(0, 3).map(m => `${getEnglishTitle(m)} (${m.Year || "?"}, ${formatVotes(getVotes(m)) || 0})`).join(" · ")), f2(ms, 0)]);
+      // สิ่งที่ผู้ใช้เห็นจริง = loadSearch ของแอป (Algolia + ค้นต้นชื่อใน Firestore เผื่อเรื่องที่ไม่อยู่ใน Algolia)
+      let user = sorted; try { user = c.rank ? sorted : (await loadSearch(c.q, null, NO_FILTER)).movies; } catch (e) { }
+      const okU = c.rank ? ok : judge(c, user, user);
+      if (ok) pass++; if (okP) passPrefix++; if (okU) passUser++;
+      rows.push([esc(c.q), esc(c.note), badge(okP), badge(ok), badge(okU), esc(user.slice(0, 3).map(m => `${getEnglishTitle(m)} (${m.Year || "?"}, ${formatVotes(getVotes(m)) || 0})`).join(" · ")), f2(ms, 0)]);
     }
-    if (indexSize !== null) put(id, `<div class="kpis"><div><b>${indexSize.toLocaleString()}</b><span>records ใน Algolia index "${esc(ALGOLIA.indexName)}"</span></div>${total ? `<div><b>${pct(indexSize, total)}</b><span>ของหนังทั้งหมดใน Firestore (${total.toLocaleString()})</span></div>` : ""}<div><b>${passPrefix}/${CASES.length} → ${pass}/${CASES.length}</b><span>กรณีที่ค้นเจอ: แบบเดิม → Algolia</span></div></div>`);
-    put(id, table(["คำค้น", "สิ่งที่ทดสอบ", "แบบเดิม (Firestore prefix)", "Algolia", "3 อันดับแรกที่ผู้ใช้เห็น (Algolia)", "เวลา (ms)"], rows));
+    if (indexSize !== null) put(id, `<div class="kpis"><div><b>${indexSize.toLocaleString()}</b><span>records ใน Algolia index "${esc(ALGOLIA.indexName)}"</span></div>${total ? `<div><b>${pct(indexSize, total)}</b><span>ของหนังทั้งหมดใน Firestore (${total.toLocaleString()})</span></div>` : ""}<div><b>${passPrefix}/${CASES.length} → ${pass}/${CASES.length} → ${passUser}/${CASES.length}</b><span>กรณีที่ค้นเจอ: แบบเดิม → Algolia → ที่ผู้ใช้เห็น</span></div></div>`);
+    put(id, table(["คำค้น", "สิ่งที่ทดสอบ", "แบบเดิม (Firestore prefix)", "Algolia", "ที่ผู้ใช้เห็น (Algolia + Firestore)", "3 อันดับแรกที่ผู้ใช้เห็น", "เวลา Algolia (ms)"], rows));
     put(id, `<p class="note">ข้อ "Custom Ranking" ตรวจลำดับดิบจาก Algolia ก่อนแอปเรียงซ้ำ — ถ้าไม่ผ่านแปลว่ายังไม่ได้ตั้ง imdbVotes (desc) ใน Algolia Dashboard (ผู้ใช้ยังเห็นลำดับถูกเพราะแอปเรียงซ้ำให้) · ถ้าจำนวน records น้อยกว่าจำนวนหนังใน Firestore เรื่องที่ไม่ได้ sync จะค้นไม่เจอ</p>`);
-    R.algolia = { cases: CASES.length, pass, passPrefix, indexSize, firestoreTotal: total, rows: rows.map(r => r.map(x => String(x).replace(/<[^>]+>/g, ""))) };
+    R.algolia = { cases: CASES.length, pass, passPrefix, passUser, indexSize, firestoreTotal: total, rows: rows.map(r => r.map(x => String(x).replace(/<[^>]+>/g, ""))) };
   } catch (e) { fail(id, e); } finally { busy(id, false); }
 }
 
@@ -1609,7 +1644,7 @@ function mdSummary() {
     `- ใช้ S.D. ประเภทแทน: ${v.usedGenre} · เส้นขอบ 0.15: ${v.boundary} (v7_8 จัดผิด ${v.boundaryChanged}) · มีข้อมูลฝั่งเดียวแล้วชี้ไปฝั่งที่มีข้อมูล: ${v.oneSideToDataSide}/${v.oneSide} · กฎเดิมบอกว่าตรงกันทั้งที่ค่าเฉลี่ยห่างเกิน 1.0: ${v.oldAgreeFar}`,
     `- มัธยฐาน S.D. รายเรื่อง ${f2(v.medianMovieSD)} vs ระดับประเภท ${f2(v.medianGenreSD)} · ตรงกับ Recommended_Trust_Side ที่เก็บไว้ ${v.storedAgree}/${v.storedCompared}`, ``); }
   if (R.filters) L.push(`## ฟิลเตอร์และ index`, `- ${R.filters.combos} ชุดฟิลเตอร์ ผ่านทุกเงื่อนไข: ${R.filters.allPass ? "ใช่" : "ไม่"} · composite index: ${R.filters.indexes.join(", ")}`, ...R.filters.details.map(x => `- ${x}`), ``);
-  if (R.algolia) { L.push(`## การค้นหา: แบบเดิม ${R.algolia.passPrefix}/${R.algolia.cases} → Algolia ${R.algolia.pass}/${R.algolia.cases}`, `- Algolia index มี ${R.algolia.indexSize ?? "—"} records${R.algolia.firestoreTotal ? ` (${pct(R.algolia.indexSize, R.algolia.firestoreTotal)} ของ Firestore)` : ""}`, ``, `| คำค้น | ทดสอบ | แบบเดิม | Algolia | 3 อันดับแรก | ms |`, `|---|---|---|---|---|---:|`); R.algolia.rows.forEach(r => L.push(`| ${r.join(" | ")} |`)); L.push(``); }
+  if (R.algolia) { L.push(`## การค้นหา: แบบเดิม ${R.algolia.passPrefix}/${R.algolia.cases} → Algolia ${R.algolia.pass}/${R.algolia.cases} → ที่ผู้ใช้เห็น ${R.algolia.passUser}/${R.algolia.cases}`, `- Algolia index มี ${R.algolia.indexSize ?? "—"} records${R.algolia.firestoreTotal ? ` (${pct(R.algolia.indexSize, R.algolia.firestoreTotal)} ของ Firestore)` : ""}`, ``, `| คำค้น | ทดสอบ | แบบเดิม | Algolia | ผู้ใช้เห็น | 3 อันดับแรก | ms |`, `|---|---|---|---|---|---|---:|`); R.algolia.rows.forEach(r => L.push(`| ${r.join(" | ")} |`)); L.push(``); }
   if (R.ai) { L.push(`## AI guardrails (${R.ai.pass}/${R.ai.tests} ผ่าน, ${R.ai.model})`, `| # | กติกา | ผล | คำตอบ | ms |`, `|---|---|---|---|---:|`); R.ai.rows.forEach(r => L.push(`| ${r.map(x => x.replace(/\|/g, "/").replace(/\n/g, " ")).join(" | ")} |`)); }
   return L.join("\n");
 }

@@ -101,7 +101,7 @@ async function runCompleteness() {
       ["Title_EN", "text"], ["Title_TH", "text"], ["Plot", "text"], ["Poster", "text"], ["Director", "text"], ["Actors", "text"],
       ["imdbRating", "raw"], ["tmdbRating", "raw"], ["TomatoScore", "raw"], ["Metascore", "raw"],
       ["Critics_Average", "num"], ["Audience_Average", "num"], ["Movie_Critics_SD", "num"], ["Movie_Audience_SD", "num"], ["Overall_SD", "num"],
-      ["Popularity", "num"], [vf, "num"], ["tmdbID", "any"], ["Keywords", "any"], ["Genres", "any"], ["Genre_for_cal", "text"], ["MediaType", "text"], ["Recommended_Trust_Side", "text"]];
+      ["Popularity", "num"], [vf, "num"], ["tmdbID", "any"], ["Keyword", "any"], ["Genres", "any"], ["Genre_for_cal", "text"], ["MediaType", "text"], ["Recommended_Trust_Side", "text"]];
     const rows = await pool(FIELDS, 6, async ([f, kind]) => {
       const present = await safeCount(notNull(f));
       const numeric = kind === "num" || kind === "raw" ? await safeCount(ff(f, "GREATER_THAN_OR_EQUAL", -1e12)) : null;
@@ -325,25 +325,32 @@ async function runAlgolia() {
       { q: "odysey", re: /odyssey/i, note: "พิมพ์ผิด 1 ตัว" }, { q: "wick", re: /john wick/i, note: "คำกลางชื่อ" },
       { q: "godfathr", re: /godfather/i, note: "พิมพ์ผิด" }, { q: "spider man", re: /spider-?man/i, note: "ไม่มีขีดกลาง" },
       { q: "โอดิส", th: true, note: "ภาษาไทย พิมพ์บางส่วน" }, { q: "โอดิสซี่", th: true, note: "ภาษาไทย มีวรรณยุกต์เกิน" },
-      { q: "avengers", rank: true, note: "เรื่องดังขึ้นก่อน (Custom Ranking)" }];
+      { q: "avengers", rank: true, note: "เรื่องดังขึ้นก่อน (Custom Ranking)" },
+      { q: "มหากาพย์", th: true, note: "ภาษาไทย ต้นชื่อ" },
+      { q: "หอมกลิ่นความรัก", th: true, note: "เรื่องโหวตน้อย (ไม่อยู่ใน Algolia)" },
+      { q: "I Feel You", re: /linger/i, note: "เรื่องโหวตน้อย ชื่ออังกฤษ" }];
+    const NO_FILTER = { genre: "", year: "", media: "", popular: "", search: "" };
     const judge = (c, list, raw) => {
       if (c.rank) { const t = (raw || list).filter(m => /avengers/i.test(getEnglishTitle(m))); return t.length ? getVotes(t[0]) >= Math.max(...t.map(getVotes)) : false; }
       if (c.th) return list.slice(0, 5).some(m => stripThaiTones(String(m.Title_TH || "")).includes(stripThaiTones(c.q).slice(0, 4)));
       return list.slice(0, 5).some(m => c.re.test(getEnglishTitle(m)));
     };
-    const rows = []; let pass = 0, passPrefix = 0;
+    const rows = []; let pass = 0, passPrefix = 0, passUser = 0;
     for (const c of CASES) {
       const [res, ms] = await timed(() => searchAlgolia(c.q, 0, 20));
       const sorted = sortSearchHits(res.movies, c.q);
       const ok = judge(c, sorted, res.movies);
       let okP = null; try { const pm = await prefixSearch(c.q); okP = judge(c, pm, pm); } catch (e) { okP = null; }
-      if (ok) pass++; if (okP) passPrefix++;
-      rows.push([esc(c.q), esc(c.note), badge(okP), badge(ok), esc(sorted.slice(0, 3).map(m => `${getEnglishTitle(m)} (${m.Year || "?"}, ${formatVotes(getVotes(m)) || 0})`).join(" · ")), f2(ms, 0)]);
+      // สิ่งที่ผู้ใช้เห็นจริง = loadSearch ของแอป (Algolia + ค้นต้นชื่อใน Firestore เผื่อเรื่องที่ไม่อยู่ใน Algolia)
+      let user = sorted; try { user = c.rank ? sorted : (await loadSearch(c.q, null, NO_FILTER)).movies; } catch (e) { }
+      const okU = c.rank ? ok : judge(c, user, user);
+      if (ok) pass++; if (okP) passPrefix++; if (okU) passUser++;
+      rows.push([esc(c.q), esc(c.note), badge(okP), badge(ok), badge(okU), esc(user.slice(0, 3).map(m => `${getEnglishTitle(m)} (${m.Year || "?"}, ${formatVotes(getVotes(m)) || 0})`).join(" · ")), f2(ms, 0)]);
     }
-    if (indexSize !== null) put(id, `<div class="kpis"><div><b>${indexSize.toLocaleString()}</b><span>records ใน Algolia index "${esc(ALGOLIA.indexName)}"</span></div>${total ? `<div><b>${pct(indexSize, total)}</b><span>ของหนังทั้งหมดใน Firestore (${total.toLocaleString()})</span></div>` : ""}<div><b>${passPrefix}/${CASES.length} → ${pass}/${CASES.length}</b><span>กรณีที่ค้นเจอ: แบบเดิม → Algolia</span></div></div>`);
-    put(id, table(["คำค้น", "สิ่งที่ทดสอบ", "แบบเดิม (Firestore prefix)", "Algolia", "3 อันดับแรกที่ผู้ใช้เห็น (Algolia)", "เวลา (ms)"], rows));
+    if (indexSize !== null) put(id, `<div class="kpis"><div><b>${indexSize.toLocaleString()}</b><span>records ใน Algolia index "${esc(ALGOLIA.indexName)}"</span></div>${total ? `<div><b>${pct(indexSize, total)}</b><span>ของหนังทั้งหมดใน Firestore (${total.toLocaleString()})</span></div>` : ""}<div><b>${passPrefix}/${CASES.length} → ${pass}/${CASES.length} → ${passUser}/${CASES.length}</b><span>กรณีที่ค้นเจอ: แบบเดิม → Algolia → ที่ผู้ใช้เห็น</span></div></div>`);
+    put(id, table(["คำค้น", "สิ่งที่ทดสอบ", "แบบเดิม (Firestore prefix)", "Algolia", "ที่ผู้ใช้เห็น (Algolia + Firestore)", "3 อันดับแรกที่ผู้ใช้เห็น", "เวลา Algolia (ms)"], rows));
     put(id, `<p class="note">ข้อ "Custom Ranking" ตรวจลำดับดิบจาก Algolia ก่อนแอปเรียงซ้ำ — ถ้าไม่ผ่านแปลว่ายังไม่ได้ตั้ง imdbVotes (desc) ใน Algolia Dashboard (ผู้ใช้ยังเห็นลำดับถูกเพราะแอปเรียงซ้ำให้) · ถ้าจำนวน records น้อยกว่าจำนวนหนังใน Firestore เรื่องที่ไม่ได้ sync จะค้นไม่เจอ</p>`);
-    R.algolia = { cases: CASES.length, pass, passPrefix, indexSize, firestoreTotal: total, rows: rows.map(r => r.map(x => String(x).replace(/<[^>]+>/g, ""))) };
+    R.algolia = { cases: CASES.length, pass, passPrefix, passUser, indexSize, firestoreTotal: total, rows: rows.map(r => r.map(x => String(x).replace(/<[^>]+>/g, ""))) };
   } catch (e) { fail(id, e); } finally { busy(id, false); }
 }
 
@@ -532,7 +539,7 @@ function mdSummary() {
     `- ใช้ S.D. ประเภทแทน: ${v.usedGenre} · เส้นขอบ 0.15: ${v.boundary} (v7_8 จัดผิด ${v.boundaryChanged}) · มีข้อมูลฝั่งเดียวแล้วชี้ไปฝั่งที่มีข้อมูล: ${v.oneSideToDataSide}/${v.oneSide} · กฎเดิมบอกว่าตรงกันทั้งที่ค่าเฉลี่ยห่างเกิน 1.0: ${v.oldAgreeFar}`,
     `- มัธยฐาน S.D. รายเรื่อง ${f2(v.medianMovieSD)} vs ระดับประเภท ${f2(v.medianGenreSD)} · ตรงกับ Recommended_Trust_Side ที่เก็บไว้ ${v.storedAgree}/${v.storedCompared}`, ``); }
   if (R.filters) L.push(`## ฟิลเตอร์และ index`, `- ${R.filters.combos} ชุดฟิลเตอร์ ผ่านทุกเงื่อนไข: ${R.filters.allPass ? "ใช่" : "ไม่"} · composite index: ${R.filters.indexes.join(", ")}`, ...R.filters.details.map(x => `- ${x}`), ``);
-  if (R.algolia) { L.push(`## การค้นหา: แบบเดิม ${R.algolia.passPrefix}/${R.algolia.cases} → Algolia ${R.algolia.pass}/${R.algolia.cases}`, `- Algolia index มี ${R.algolia.indexSize ?? "—"} records${R.algolia.firestoreTotal ? ` (${pct(R.algolia.indexSize, R.algolia.firestoreTotal)} ของ Firestore)` : ""}`, ``, `| คำค้น | ทดสอบ | แบบเดิม | Algolia | 3 อันดับแรก | ms |`, `|---|---|---|---|---|---:|`); R.algolia.rows.forEach(r => L.push(`| ${r.join(" | ")} |`)); L.push(``); }
+  if (R.algolia) { L.push(`## การค้นหา: แบบเดิม ${R.algolia.passPrefix}/${R.algolia.cases} → Algolia ${R.algolia.pass}/${R.algolia.cases} → ที่ผู้ใช้เห็น ${R.algolia.passUser}/${R.algolia.cases}`, `- Algolia index มี ${R.algolia.indexSize ?? "—"} records${R.algolia.firestoreTotal ? ` (${pct(R.algolia.indexSize, R.algolia.firestoreTotal)} ของ Firestore)` : ""}`, ``, `| คำค้น | ทดสอบ | แบบเดิม | Algolia | ผู้ใช้เห็น | 3 อันดับแรก | ms |`, `|---|---|---|---|---|---|---:|`); R.algolia.rows.forEach(r => L.push(`| ${r.join(" | ")} |`)); L.push(``); }
   if (R.ai) { L.push(`## AI guardrails (${R.ai.pass}/${R.ai.tests} ผ่าน, ${R.ai.model})`, `| # | กติกา | ผล | คำตอบ | ms |`, `|---|---|---|---|---:|`); R.ai.rows.forEach(r => L.push(`| ${r.map(x => x.replace(/\|/g, "/").replace(/\n/g, " ")).join(" | ")} |`)); }
   return L.join("\n");
 }
