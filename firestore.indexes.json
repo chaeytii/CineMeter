@@ -373,6 +373,20 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "MOVIES",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "Language",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "Popularity",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

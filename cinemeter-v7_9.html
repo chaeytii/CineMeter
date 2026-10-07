@@ -1910,7 +1910,8 @@
          * PERSONALIZED แบบไม่ต้องล็อกอิน (PERS-01)
          * เบราว์เซอร์เครื่องนั้นจำเอง (localStorage) ว่าผู้ใช้ชอบหนังประเภทไหน ไม่มีอะไรส่งขึ้นเซิร์ฟเวอร์
          * - เปิดหน้ารายละเอียด 1 ครั้ง = ประเภทของเรื่องนั้นได้ +1, กด ♥ = +3 (กดซ้ำ = ยกเลิก -3)
-         * - แถว "For you" บนหน้าแรก = หนังคล้าย 3 เรื่องล่าสุดที่กด ♥ (PERS-02) + หนังจากประเภทที่ได้ตั้งแต่ 2 แต้มขึ้นไป 2 อันดับแรก
+         * - แถว "For you" บนหน้าแรก = หนังคล้าย 3 เรื่องล่าสุดที่กด ♥ (PERS-02/03: keyword + ภาษาเดียวกัน) ขึ้นก่อน
+ *   แล้วเติมด้วยหนังจากประเภทที่ได้ตั้งแต่ 2 แต้มขึ้นไป 2 อันดับแรก
  *   ไม่ซ้ำเรื่องที่เปิดดูหรือกดชอบแล้ว และโหลดใหม่ทุกครั้งที่ประวัติเปลี่ยน
  * - แถว "Your likes" = เรื่องที่กด ♥ ไว้ ใหม่สุดก่อน (เก็บแค่รหัสหนังในเครื่อง)
          * - เปลี่ยนเครื่องหรือล้างข้อมูลเบราว์เซอร์ = เริ่มนับใหม่ / กด "ล้างประวัติ" ได้ทุกเมื่อ
@@ -2008,12 +2009,47 @@
             return out.filter(m => m && m.Poster && m.Poster !== "N/A");
         }
 
-        // หนังคล้ายเรื่องที่กดชอบ: ใช้ตัวคัดของ More like this (ประเภท ยุค ค่ายผลิต keyword) โดยไม่เรียก AI — จำผลไว้ต่อเรื่อง
+        // หนังคล้ายเรื่องที่กดชอบ (PERS-03): ตัวเลือกจาก More like this + เรื่องภาษาเดียวกัน แล้วจัดอันดับด้วย keyword เป็นหลัก
+        // ไม่ตัดเรื่องโหวตน้อย (คนชอบซีรีส์เฉพาะกลุ่ม เช่น BL ก็ได้เรื่องแนวเดียวกัน) และไม่เรียก AI — จำผลไว้ต่อเรื่อง
+        const LANG_POOL = 80;
+        function getLanguage(m) { return String(m?.Language ?? m?.language ?? "").trim().toLowerCase(); }
+
+        function forYouScore(seed, cand) {
+            const lang = getLanguage(seed);
+            return keywordOverlap(seed, cand) * 3
+                 + (lang && lang === getLanguage(cand) ? 1.2 : 0)
+                 + (isSeries(seed) === isSeries(cand) ? 0.6 : 0)
+                 + genreOverlap(seed, cand) * 0.6
+                 + companyOverlap(seed, cand) * 0.5
+                 + eraCloseness(seed, cand) * 0.4
+                 + Math.min(0.3, Math.log10(getVotes(cand) + 1) / 20);
+        }
+
+        // เรื่องภาษาเดียวกับต้นทาง ดังก่อน (ต้องมี index Language + Popularity; ยังไม่มีก็ดึงแบบไม่เรียง)
+        async function loadSameLanguage(seed) {
+            const field = seed.Language !== undefined ? "Language" : "language";
+            const value = seed[field];
+            if (!getLanguage(seed)) return [];
+            try {
+                const snap = await runQuerySafe(
+                    [where(field, "==", value), orderBy("Popularity", "desc"), limit(LANG_POOL)],
+                    [where(field, "==", value), limit(LANG_POOL)]
+                );
+                return snap.docs.map(docToMovie).filter(m => getLanguage(m) === getLanguage(seed));
+            } catch (e) { reportIndexError(e); return []; }
+        }
+
         const similarCache = new Map();
         function similarToLiked(seed) {
             if (!similarCache.has(seed.id)) {
-                similarCache.set(seed.id, buildCandidatePool(seed)
-                    .then(pool => keepFamiliar(seed, pool).slice().sort((a, b) => preScore(seed, b) - preScore(seed, a)))
+                similarCache.set(seed.id, Promise.all([buildCandidatePool(seed), loadSameLanguage(seed)])
+                    .then(([pool, same]) => {
+                        const byId = new Map();
+                        [...pool, ...same].forEach(m => {
+                            if (m && m.id !== seed.id && m.Poster && m.Poster !== "N/A" && !byId.has(m.id)) byId.set(m.id, m);
+                        });
+                        return [...byId.values()].sort((a, b) => forYouScore(seed, b) - forYouScore(seed, a));
+                    })
                     .catch(() => { similarCache.delete(seed.id); return []; }));
             }
             return similarCache.get(seed.id);
@@ -2352,9 +2388,14 @@
                     // หนังคล้ายเรื่องที่กดชอบล่าสุด + หนังที่คนดูชอบในประเภทที่ผู้ใช้ชอบ สลับกันทีละเรื่อง
                     const t = readTaste();
                     const seeds = await loadMoviesByIds(row.seeds || []);
-                    const lists = await Promise.all(seeds.map(similarToLiked));
-                    for (const g of row.genres) lists.push((await loadRanked(f.popular, null, { ...f, genre: g })).movies.filter(m => !familyCartoonOutOfPlace(m, g)));
-                    movies = mixForYou(lists, [...t.seen, ...t.liked], ROW_SIZE);
+                    // เรื่องคล้ายที่กดชอบขึ้นก่อน หนังจากประเภทที่ชอบใช้เติมเมื่อยังไม่ครบแถว
+                    const skip = [...t.seen, ...t.liked];
+                    const fromLikes = mixForYou(await Promise.all(seeds.map(similarToLiked)), skip, ROW_SIZE);
+                    const genreLists = [];
+                    if (fromLikes.length < ROW_SIZE) {
+                        for (const g of row.genres) genreLists.push((await loadRanked(f.popular, null, { ...f, genre: g })).movies.filter(m => !familyCartoonOutOfPlace(m, g)));
+                    }
+                    movies = fromLikes.concat(mixForYou(genreLists, skip.concat(fromLikes.map(m => m.id)), ROW_SIZE - fromLikes.length));
                 } else if (row.liked) {
                     movies = await loadMoviesByIds(row.ids);
                 } else {
