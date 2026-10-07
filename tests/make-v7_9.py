@@ -654,6 +654,12 @@ PATCHES = [
     ('AI-MODELS-01 keep fatal error',
      '                } catch (err) {\n                    lastErr = err;\n                }\n            }\n            throw lastErr || new Error("Gemini request failed");',
      '                } catch (err) {\n                    if (err.fatal) throw err;\n                    lastErr = err;\n                }\n            }\n            throw lastErr || new Error("Gemini request failed");'),
+    ('CHAT-03 answer with the site verdict',
+     '- recommendSide.verdict = ข้อสรุปของเว็บว่าควรเชื่อฝั่งไหน ให้อธิบายเหตุผลโดยอ้างค่าเฉลี่ยสองฝั่งและตัวเลข S.D. ประกอบ',
+     '- recommendSide.verdict = ข้อสรุปของเว็บว่าควรเชื่อฝั่งไหน เมื่อผู้ใช้ถามว่าควรเชื่อฝั่งไหน ให้ตอบตามข้อสรุปนี้เท่านั้น: พูดข้อสรุปตามคำเดิมในประโยคแรก แล้วค่อยอธิบายเหตุผลโดยอ้างค่าเฉลี่ยสองฝั่งและตัวเลข S.D. ประกอบ ห้ามเลือกฝั่งเอง (รวมถึงตอนที่ข้อสรุปเป็น ตรงกัน / เห็นต่าง / เฉพาะกลุ่ม)'),
+    ('CHAT-03 rule 8',
+     '7. picks = docId ที่อยากแนะนำ ต้องมาจาก DATABASE_CANDIDATES เท่านั้น (สูงสุด 3) ถ้าไม่มีให้เป็น []',
+     '7. picks = docId ที่อยากแนะนำ ต้องมาจาก DATABASE_CANDIDATES เท่านั้น (สูงสุด 3) ถ้าไม่มีให้เป็น []\n8. ห้ามแนะนำให้เชื่อฝั่งที่ขัดกับ recommendSide.verdict ของเว็บ แม้ค่าเฉลี่ยฝั่งหนึ่งจะสูงกว่า'),
 ]
 for name, old, new in PATCHES:
     n = src.count(old)

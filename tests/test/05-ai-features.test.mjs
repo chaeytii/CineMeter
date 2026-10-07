@@ -236,3 +236,10 @@ test("[AI-CB-17] ทุกรุ่นที่หน้าเว็บเรี
   const missing = appModels().filter(m => !allowed.includes(m));
   assert.deepEqual(missing, [], `Cloud Function จะตอบ 400 ให้รุ่น: ${missing.join(", ")}`);
 });
+
+test("[AI-CB-18] ถามว่าควรเชื่อฝั่งไหน → บอทต้องตอบตาม Recommend side ของเว็บในประโยคแรก ห้ามเลือกฝั่งเอง", () => {
+  assert.match(app.CHAT_SYSTEM_PROMPT, /ให้ตอบตามข้อสรุปนี้เท่านั้น/);
+  assert.match(app.CHAT_SYSTEM_PROMPT, /ข้อสรุปตามคำเดิมในประโยคแรก/);
+  assert.match(app.CHAT_SYSTEM_PROMPT, /ห้ามเลือกฝั่งเอง/);
+  assert.match(app.CHAT_SYSTEM_PROMPT, /ห้ามแนะนำให้เชื่อฝั่งที่ขัดกับ recommendSide\.verdict/);
+});

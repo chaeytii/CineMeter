@@ -984,7 +984,7 @@ const CHAT_SYSTEM_PROMPT = `คุณคือ "CineMeter Assistant" ผู้�
 - คนดูกับนักวิจารณ์เห็นตรงกันหรือไม่ ดูจากค่าเฉลี่ยสองฝั่ง: ห่างกันไม่เกิน 1.0 = ตรงกัน, ห่างเกิน 1.0 = เห็นต่าง
 - overall S.D. สูงผิดปกติ = หนังเฉพาะกลุ่ม ขึ้นกับรสนิยมส่วนตัว
 - sd.*Source = "genre_average" แปลว่าหนังเรื่องนี้ไม่มีค่าของตัวเอง ระบบใช้ค่าเฉลี่ยของประเภทหนังแทน ให้บอกผู้ใช้ด้วย
-- recommendSide.verdict = ข้อสรุปของเว็บว่าควรเชื่อฝั่งไหน ให้อธิบายเหตุผลโดยอ้างค่าเฉลี่ยสองฝั่งและตัวเลข S.D. ประกอบ
+- recommendSide.verdict = ข้อสรุปของเว็บว่าควรเชื่อฝั่งไหน เมื่อผู้ใช้ถามว่าควรเชื่อฝั่งไหน ให้ตอบตามข้อสรุปนี้เท่านั้น: พูดข้อสรุปตามคำเดิมในประโยคแรก แล้วค่อยอธิบายเหตุผลโดยอ้างค่าเฉลี่ยสองฝั่งและตัวเลข S.D. ประกอบ ห้ามเลือกฝั่งเอง (รวมถึงตอนที่ข้อสรุปเป็น ตรงกัน / เห็นต่าง / เฉพาะกลุ่ม)
 
 กติกา:
 1. ตัวเลข ปี ชื่อเรื่อง ที่มาจากข้อมูลที่แนบมา ต้องตรงตามข้อมูลเท่านั้น ห้ามแต่งหรือปัดเปลี่ยน
@@ -994,16 +994,17 @@ const CHAT_SYSTEM_PROMPT = `คุณคือ "CineMeter Assistant" ผู้�
 5. ห้ามสปอยล์ตอนจบ เว้นแต่ผู้ใช้ขอเอง
 6. ตอบภาษาเดียวกับผู้ใช้ กระชับ อ่านง่าย (ปกติไม่เกิน 6 บรรทัด ถ้าขอวิเคราะห์ละเอียดยาวได้ไม่เกิน 12 บรรทัด) ไม่ใช้ markdown หัวข้อ
 7. picks = docId ที่อยากแนะนำ ต้องมาจาก DATABASE_CANDIDATES เท่านั้น (สูงสุด 3) ถ้าไม่มีให้เป็น []
+8. ห้ามแนะนำให้เชื่อฝั่งที่ขัดกับ recommendSide.verdict ของเว็บ แม้ค่าเฉลี่ยฝั่งหนึ่งจะสูงกว่า
 
 ตอบเป็น JSON เท่านั้น: {"reply":"ข้อความ","picks":["docId"]}`;
 
-// ↓ roundOrNull (cinemeter-v7_9.html line 3461)
+// ↓ roundOrNull (cinemeter-v7_9.html line 3462)
 function roundOrNull(v, d = 2) {
             const n = toNumOrNull(v);
             return n === null ? null : Number(n.toFixed(d));
         }
 
-// ↓ compactMovie (cinemeter-v7_9.html line 3524)
+// ↓ compactMovie (cinemeter-v7_9.html line 3525)
 function compactMovie(m) {
             return {
                 id: m.id,
@@ -1025,7 +1026,7 @@ function compactMovie(m) {
             };
         }
 
-// ↓ buildChatPrompt (cinemeter-v7_9.html line 3549)
+// ↓ buildChatPrompt (cinemeter-v7_9.html line 3550)
 function buildChatPrompt({ userText, currentMovie = null, candidates = [], history = [] }) {
             const blocks = [
                 `[CURRENT_MOVIE]\n${currentMovie ? JSON.stringify(currentMovie) : "none (ผู้ใช้ไม่ได้เปิดดูหนังเรื่องใดอยู่)"}`,
@@ -1055,7 +1056,7 @@ function buildChatPrompt({ userText, currentMovie = null, candidates = [], histo
             };
         }
 
-// ↓ extractReply (cinemeter-v7_9.html line 3695)
+// ↓ extractReply (cinemeter-v7_9.html line 3696)
 function extractReply(raw) {
             const parsed = parseJsonLoose(raw);
             if (parsed?.reply) return parsed;
@@ -1462,6 +1463,22 @@ async function runAlgolia() {
   } catch (e) { fail(id, e); } finally { busy(id, false); }
 }
 
+/* G3: คำตอบ "ควรเชื่อฝั่งไหน" ต้องตรงกับ Recommend side ของเว็บ
+   - ประโยคแรก (~120 ตัวอักษร) ต้องพูดข้อสรุปของเว็บ
+   - ทั้งคำตอบห้ามแนะนำฝั่งอื่น (เดิมตรวจแค่ว่ามีคำว่า "คนดู" → บอทตอบ "แนะนำนักวิจารณ์ แม้ระบบจะแนะนำคนดู" ก็ผ่าน) */
+function trustAnswerOk(verdictText, reply) {
+  const side = t => /นักวิจารณ์/.test(t) ? "critics" : /คนดู|ผู้ชม/.test(t) ? "audience" : null;
+  const want = /และ|ตรงกัน|เห็นต่าง|เฉพาะกลุ่ม|ขาดข้อมูล|ไม่เพียงพอ/.test(verdictText) ? null : side(verdictText);
+  const text = String(reply || "");
+  const head = text.slice(0, 120);
+  const key = want === "critics" ? /นักวิจารณ์/ : want === "audience" ? /คนดู|ผู้ชม/ : /ตรงกัน|เห็นต่าง|เฉพาะกลุ่ม|ความชอบส่วนบุคคล|ขาดข้อมูล|ไม่เพียงพอ/;
+  if (!key.test(head)) return false;
+  // "ผมแนะนำให้เชื่อคะแนนฝั่งนักวิจารณ์" / "ควรเชื่อฝั่งคนดู" — ยกเว้นประโยคที่อ้างว่าระบบ/เว็บแนะนำ
+  const recs = [...text.matchAll(/(ระบบ\S{0,6}|เว็บ\S{0,6})?(แนะนำให้|ควร)เชื่อ(?:คะแนน)?(?:ฝั่ง|ทาง)?\s*(นักวิจารณ์|คนดู|ผู้ชม)/g)]
+    .filter(m => !m[1]).map(m => side(m[3]));
+  return recs.every(s => s === want);
+}
+
 /* ---------------- 8) AI guardrails (uses Gemini quota) ---------------- */
 async function runAI() {
   const id = "ai"; clear(id); busy(id, true);
@@ -1481,7 +1498,7 @@ async function runAI() {
       { k: "G2", name: "ตัวเลขคะแนนต้องตรงกับฐานข้อมูล", user: "คะแนนนักวิจารณ์และคะแนนคนดูของเรื่องนี้เท่าไร", cur: ctx, c: [],
         check: p => p.reply.includes(String(ctx.scores.criticsAverage)) && p.reply.includes(String(ctx.scores.audienceAverage)) },
       { k: "G3", name: "คำตัดสินต้องสอดคล้องกับ Recommend side ของเว็บ", user: "เรื่องนี้ควรเชื่อคะแนนฝั่งไหน เพราะอะไร", cur: ctx, c: [],
-        check: p => { const key = /นักวิจารณ์/.test(verdict.text) && !/และ/.test(verdict.text) ? /นักวิจารณ์/ : /คนดู/.test(verdict.text) && !/และ/.test(verdict.text) ? /คนดู/ : /ตรงกัน|เฉพาะกลุ่ม|ขาดข้อมูล/; return key.test(p.reply); } },
+        check: p => trustAnswerOk(verdict.text, p.reply) },
       { k: "G4", name: "แนะนำหนังได้เฉพาะจาก DATABASE_CANDIDATES (ดูคำตอบดิบก่อนแอปกรอง)", user: "แนะนำหนังจากรายการที่มีให้ 3 เรื่อง", cur: null, c: cands,
         check: p => p.picks.length > 0 && p.picks.every(x => cands.some(m => m.id === x)) },
       { k: "G5", name: "คำถามความรู้ทั่วไป → ตอบได้ ไม่แนบหนัง", user: "อธิบายสั้น ๆ ว่า Method Acting คืออะไร", cur: null, c: [],
