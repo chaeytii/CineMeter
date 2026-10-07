@@ -149,3 +149,72 @@ test("[AI-CB-07] System prompt มีกติกากันแต่งข้�
   assert.match(app.CHAT_SYSTEM_PROMPT, /ระบุว่าเป็นความรู้ทั่วไป/);
   assert.match(app.CHAT_SYSTEM_PROMPT, /ต้องมาจาก DATABASE_CANDIDATES เท่านั้น/);
 });
+
+// ---------------- CHAT-02: คำถามต่อเนื่อง + ค้นตาม keyword / ภาษา / หนัง-ซีรีส์ ----------------
+test("[AI-CB-13] คำถามต่อเนื่อง: ขั้นวางแผนค้นหาเห็นบทสนทนาก่อนหน้า (4 ข้อความล่าสุด) และชื่อเรื่องบนการ์ดที่บอทแนะนำไป", async () => {
+  await chatSetup();
+  h.set("currentDetail", null);
+  const turn = app.modelTurn({ text: "ลองดูเรื่องเหล่านี้", movies: [{ Title_EN: "2gether", Year: "2020" }, { Title_EN: "Bad Buddy", Year: "2021" }] });
+  assert.deepEqual(turn.picks, ["2gether (2020)", "Bad Buddy (2021)"]);
+  assert.equal(app.modelTurn({ text: "สวัสดี", movies: [] }).picks, undefined);
+  const history = [
+    { role: "user", text: "เก่าสุด ไม่ควรเห็น" }, { role: "model", text: "ตอบเก่า" },
+    { role: "user", text: "ขอหนังผี" }, { role: "model", text: "นี่ครับ" },
+    { role: "user", text: "แนะนำซีรีส์วายหน่อย" }, turn
+  ];
+  const calls = [];
+  h.setGemini(async (opts) => { calls.push(opts); return calls.length === 1 ? '{"mode":"chat"}' : '{"reply":"ได้เลย","picks":[]}'; });
+  await app.answerWithGemini("แบบเกาหลีบ้าง", history);
+  const planText = calls[0].contents[0].parts[0].text;
+  assert.match(planText, /HISTORY:\nผู้ใช้: ขอหนังผี\nบอท: นี่ครับ\nผู้ใช้: แนะนำซีรีส์วายหน่อย\nบอท: ลองดูเรื่องเหล่านี้ \[แนะนำ: 2gether \(2020\), Bad Buddy \(2021\)\]/);
+  assert.ok(!planText.includes("เก่าสุด"), "ส่งแค่ 4 ข้อความล่าสุด");
+  assert.match(planText, /คำถาม: แบบเกาหลีบ้าง$/);
+  const answerTurns = calls[1].contents.map(c => c.parts[0].text).join("\n");
+  assert.match(answerTurns, /\[แนะนำ: 2gether \(2020\), Bad Buddy \(2021\)\]/, "ขั้นตอบเห็นการ์ดที่แนะนำไปด้วย");
+  assert.ok(app.planHistoryText([{ role: "user", text: "ก".repeat(500) }]).length < 260, "ตัดข้อความยาว");
+  assert.equal(app.planHistoryText([]), "");
+  assert.match(app.PLAN_SYSTEM, /"keyword"/);
+  assert.match(app.PLAN_SYSTEM, /เรื่องที่สอง/);
+});
+
+const blRows = () => {
+  const mk = (id, title, lang, kw, media, pop, extra = {}) => ({
+    id, Title_EN: title, Title_TH: "", Year: "2022", Released: "2022-03-01", Genre_for_cal: "หนังชีวิต", Genres: ["หนังชีวิต", "หนังรักโรแมนติก"],
+    MediaType: media, Language: lang, Keyword: kw, imdbVotes: 3000, Popularity: pop, Audience_Average: 8,
+    Poster: `https://img.example/${id}.jpg`, CollectionID: 0, Companies: [], ...extra });
+  return {
+    thBL: [mk("ttb1", "2gether", "th", "boys' love (bl), university", "ซีรีส์", 3), mk("ttb2", "Bad Buddy", "th", "boys' love (bl), rivalry", "ซีรีส์", 2)],
+    thBLMovie: mk("ttb3", "BL Movie", "th", "boys' love (bl)", "ภาพยนตร์", 2.5),
+    thOther: mk("ttt1", "Thai Drama", "th", "family, blood feud", "ซีรีส์", 2.8),
+    koBL: mk("ttk1", "Semantic Error", "ko", "boys' love (bl), college", "ซีรีส์", 1.5),
+    koHorror: mk("ttk2", "Train to Busan", "ko", "zombie", "ภาพยนตร์", 1.2, { Genre_for_cal: "สยองขวัญ", Genres: ["สยองขวัญ"] }),
+  };
+};
+
+test("[AI-CB-14] ถาม \"ซีรีส์วายไทย\": แผน keyword + ภาษา + ซีรีส์ → ได้เฉพาะซีรีส์ภาษาไทยที่มี keyword BL (เทียบทั้งคำ ไม่ใช่ blood)", async () => {
+  const r = blRows();
+  await useDb([...makeMovies(800, 5), ...r.thBL, r.thBLMovie, r.thOther, r.koBL, r.koHorror]);
+  const ms = await app.candidatesFromPlan({ mode: "keyword", keyword: "boys' love, gay theme", language: "th", media: "series" }, null);
+  assert.deepEqual(ms.map(m => m.id).sort(), ["ttb1", "ttb2"]);
+  const bl = app.keywordMatcher("bl");
+  assert.ok(bl(r.thBL[0]) && !bl(r.thOther), "'bl' ตรงกับ boys' love (bl) แต่ไม่ตรงกับ blood feud");
+  assert.ok(app.keywordMatcher("Boys Love")(r.koBL), "ไม่สนตัวพิมพ์และเครื่องหมาย");
+  assert.equal(app.keywordMatcher(" , "), null);
+  assert.equal(app.compactMovie(r.koBL).language, "ko", "ส่งภาษาของแต่ละเรื่องให้ Gemini");
+  const ko = await app.candidatesFromPlan({ mode: "genre", genre: "horror", language: "ko", media: "movie" }, null);
+  assert.deepEqual(ko.map(m => m.id), ["ttk2"]);
+});
+
+test("[AI-CB-15] (edge) ไม่ระบุภาษาและเรื่องดังไม่ตรง keyword → ค้นเพิ่มในภาษาไทย/เกาหลี/ญี่ปุ่น/จีน; มีภาษาแต่ไม่มีเรื่องตรง → ใช้เรื่องภาษานั้น; ไม่มีทั้งคู่ → กลับไปใช้แผนเดิม; โหมด chat ไม่ค้น", async () => {
+  const r = blRows();
+  await useDb([...makeMovies(800, 5), ...r.thBL, r.thBLMovie, r.thOther, r.koBL, r.koHorror]);
+  const any = await app.candidatesFromPlan({ mode: "keyword", keyword: "boys' love" }, null);
+  assert.deepEqual(any.map(m => m.id).sort(), ["ttb1", "ttb2", "ttb3", "ttk1"]);
+  const noHitTh = await app.candidatesFromPlan({ mode: "keyword", keyword: "space opera", language: "th" }, null);
+  assert.ok(noHitTh.length > 0 && noHitTh.every(m => m.Language === "th"));
+  const fallback = await app.candidatesFromPlan({ mode: "genre", genre: "comedy", keyword: "space opera" }, null);
+  assert.ok(fallback.length > 0 && fallback.every(m => app.matchesGenre(m, "ตลก")), "ไม่มีเรื่องตรง keyword → ใช้แผนประเภทเดิม");
+  const series = await app.candidatesFromPlan({ mode: "genre", genre: "comedy", media: "series" }, null);
+  assert.ok(series.length > 0 && series.every(m => app.isSeries(m)), "กรองซีรีส์ในแผนประเภทเดิมด้วย");
+  assert.deepEqual(await app.candidatesFromPlan({ mode: "chat", keyword: "boys' love", language: "th" }, null), []);
+});

@@ -9,8 +9,8 @@
 
 ```bash
 cd tests
-./run-tests.sh v7_8     # ก่อนแก้: ผ่าน 77/128
-./run-tests.sh v7_9     # ส่งมอบ: ผ่าน 128/128
+./run-tests.sh v7_8     # ก่อนแก้: ผ่าน 77/131
+./run-tests.sh v7_9     # ส่งมอบ: ผ่าน 131/131
 python3 make-v7_9.py ../cinemeter-v7_8.html ../cinemeter-v7_9.html   # สร้าง v7_9 จาก v7_8 ใหม่ (แก้ 9 จุด + ย้าย Gemini key ไป Cloud Function 3 จุด + จัดอันดับแบบถ่วงโหวต 8 จุด)
 ```
 
@@ -21,7 +21,7 @@ python3 make-v7_9.py ../cinemeter-v7_8.html ../cinemeter-v7_9.html   # สร้
 | ไฟล์ | หน้าที่ |
 |---|---|
 | `extract.mjs`, `lib-extract.mjs` | ดึงโค้ดจาก HTML → `cinemeter-logic-<version>.mjs` (+ แผนที่เลขบรรทัด `*-map.txt`) |
-| `test/*.test.mjs` | เทสต์ 128 เคส แบ่งกลุ่ม BL / AI / SW / RB / SEC (`09-weighted-rank` = จัดอันดับแบบถ่วงโหวต, `10-personalized` = แถว For you, `11-franchise` = ภาคต่อ/ค่ายผลิต, `12-genre-indexes` = ทุก query ตอนกรองด้วย Genres มี index ใน `firestore.indexes.json`, `13-home-rows` = หน้าแรกไม่แสดงเรื่องซ้ำหลายแถว, `14-for-you-likes` = For you จากเรื่องที่กดชอบ + แถว Your likes, `15-hero-for-you` = แบนเนอร์หมุนจาก For you) |
+| `test/*.test.mjs` | เทสต์ 131 เคส แบ่งกลุ่ม BL / AI / SW / RB / SEC (`09-weighted-rank` = จัดอันดับแบบถ่วงโหวต, `10-personalized` = แถว For you, `11-franchise` = ภาคต่อ/ค่ายผลิต, `12-genre-indexes` = ทุก query ตอนกรองด้วย Genres มี index ใน `firestore.indexes.json`, `13-home-rows` = หน้าแรกไม่แสดงเรื่องซ้ำหลายแถว, `14-for-you-likes` = For you จากเรื่องที่กดชอบ + แถว Your likes, `15-hero-for-you` = แบนเนอร์หมุนจาก For you) |
 | `helpers/fake-firestore.mjs` | Firestore จำลอง (เทียบชนิดข้อมูลเข้มงวด, error เมื่อไม่มี composite index — ส่งรายการ index จาก `firestore.indexes.json` ให้ตรวจแบบเดียวกับ Firestore จริงได้) |
 | `helpers/dataset.mjs` | ข้อมูลสังเคราะห์รูปแบบเดียวกับ MOVIES |
 | `helpers/dom-stub.mjs` | DOM จำลองสำหรับฟังก์ชันที่แตะหน้าจอ |
