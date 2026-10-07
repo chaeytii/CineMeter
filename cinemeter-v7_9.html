@@ -2907,7 +2907,9 @@
         }
 
         // ชุดภาพยนตร์ (ภาคต่อ) และค่ายผลิต จาก TMDB — weekly_update.py เติมให้ (CollectionID 0 = ไม่อยู่ชุดไหน)
-        const FAMILIAR = { share: 0.2, floor: 5000, keep: 8 };   // ตัดหนังที่โหวตน้อยกว่า 20% ของต้นทาง (ขั้นต่ำ 5,000) ถ้ายังเหลือ ≥ 8 เรื่อง
+        // ตัดหนังที่โหวตน้อยกว่า 20% ของต้นทาง (ขั้นต่ำ 5,000) ถ้ายังเหลือ ≥ 8 เรื่อง
+        // ต้นทางโหวตน้อยเอง (ซีรีส์เฉพาะกลุ่ม เช่น BL) → ขั้นต่ำลดเหลือครึ่งหนึ่งของโหวตต้นทาง ไม่ตัดเรื่องแนวเดียวกันทิ้ง (SIM-03)
+        const FAMILIAR = { share: 0.2, floor: 5000, nicheShare: 0.5, keep: 8 };
 
         function getCollectionId(m) {
             const v = Number(m?.CollectionID);
@@ -2931,14 +2933,18 @@
 
         // หนังที่คนรู้จักพอ ๆ กับต้นทาง — ถ้าตัดแล้วเหลือน้อยเกินไปใช้รายการเดิม
         function keepFamiliar(base, list) {
-            const min = Math.max(FAMILIAR.floor, getVotes(base) * FAMILIAR.share);
+            const votes = getVotes(base);
+            const min = Math.max(Math.min(FAMILIAR.floor, votes * FAMILIAR.nicheShare), votes * FAMILIAR.share);
             const ok = list.filter(m => getVotes(m) >= min);
             return ok.length >= FAMILIAR.keep ? ok : list;
         }
 
         // คะแนนคัดตัวเลือกก่อนส่งให้ LLM — ยุคสมัยมีน้ำหนักรองจาก keyword, ค่ายเดียวกันช่วยเล็กน้อย
-        function preScore(base, cand) {
-            return keywordOverlap(base, cand) * 2.2
+        // weight (ไม่บังคับ) = น้ำหนัก keyword ตามความหายากจาก keywordWeights + ภาษาเดียวกันได้คะแนนเพิ่ม (SIM-03)
+        function preScore(base, cand, weight) {
+            const lang = getLanguage(base);
+            return (weight ? weightedKeywordOverlap(base, cand, weight) : keywordOverlap(base, cand)) * 2.2
+                 + (weight && lang && lang === getLanguage(cand) ? 0.8 : 0)
                  + eraCloseness(base, cand) * 1.6
                  + genreOverlap(base, cand) * 0.9
                  + companyOverlap(base, cand) * 0.8
@@ -2983,9 +2989,9 @@
             return eraCloseness(base, m) === 1 ? "ยุคเดียวกัน" : "";
         }
 
-        function fallbackRank(base, candidates) {
+        function fallbackRank(base, candidates, weight) {
             return candidates
-                .map(m => ({ movie: m, score: preScore(base, m) }))
+                .map(m => ({ movie: m, score: preScore(base, m, weight) }))
                 .sort((a, b) => b.score - a.score)
                 .slice(0, 6)
                 .map(x => ({ movie: x.movie, reason: eraTag(base, x.movie) }));
@@ -3067,6 +3073,16 @@ sameStudio = true คือค่ายผลิตเดียวกับห�
 ตอบเป็น JSON เท่านั้น: {"summary":"สรุปสั้นๆ ว่าทำไมกลุ่มนี้ถึงเข้ากัน","picks":[{"id":"docId","tag":"คำสั้นๆ ไม่เกิน 12 ตัวอักษร"}]}
 เลือกมาไม่เกิน 6 เรื่อง`;
 
+        // ตัวเลือกของ More like this = ตัวคัดเดิม + เรื่องภาษาเดียวกันที่ดัง (ตัวเดียวกับ For you) ไม่รวมภาคในชุดเดียวกัน (SIM-03)
+        async function similarPool(base) {
+            const [pool, same] = await Promise.all([buildCandidatePool(base), loadSameLanguage(base)]);
+            const byId = new Map();
+            [...pool, ...same].forEach(m => {
+                if (m && m.id !== base.id && m.Poster && m.Poster !== "N/A" && !sameCollection(base, m) && !byId.has(m.id)) byId.set(m.id, m);
+            });
+            return [...byId.values()];
+        }
+
         async function fetchSimilarMovies(currentMovie) {
             const grid = document.getElementById("suggestedGrid");
             const note = document.getElementById("suggested-note");
@@ -3074,7 +3090,7 @@ sameStudio = true คือค่ายผลิตเดียวกับห�
             note.innerText = "";
 
             try {
-                let candidates = await buildCandidatePool(currentMovie);
+                let candidates = await similarPool(currentMovie);
                 if (!candidates.length) {
                     grid.innerHTML = `<p class="no-results">ยังไม่มีเรื่องที่ใกล้เคียงในฐานข้อมูล</p>`;
                     return;
@@ -3087,9 +3103,10 @@ sameStudio = true คือค่ายผลิตเดียวกับห�
                     if (near.length >= 8) candidates = near;
                 }
                 candidates = keepFamiliar(currentMovie, candidates);
+                const weight = keywordWeights([...candidates, currentMovie]);
 
                 const shortlist = candidates
-                    .map(m => ({ m, s: preScore(currentMovie, m) }))
+                    .map(m => ({ m, s: preScore(currentMovie, m, weight) }))
                     .sort((a, b) => b.s - a.s)
                     .slice(0, 24)
                     .map(x => x.m);
@@ -3132,7 +3149,7 @@ sameStudio = true คือค่ายผลิตเดียวกับห�
                             if (sameEra.length < Math.min(4, picks.length)) {
                                 const filler = shortlist
                                     .filter(m => Math.abs(getYear(m) - baseYear) <= 10 && !picks.some(p => p.movie.id === m.id))
-                                    .sort((a, b) => preScore(currentMovie, b) - preScore(currentMovie, a));
+                                    .sort((a, b) => preScore(currentMovie, b, weight) - preScore(currentMovie, a, weight));
                                 while (filler.length && picks.filter(p => Math.abs(getYear(p.movie) - baseYear) <= 10).length < Math.min(4, picks.length)) {
                                     const drop = picks.map((p, i) => [i, Math.abs(getYear(p.movie) - baseYear)])
                                         .sort((a, b) => b[1] - a[1])[0];
@@ -3149,7 +3166,7 @@ sameStudio = true คือค่ายผลิตเดียวกับห�
                 }
 
                 if (!picks || !picks.length) {
-                    picks = fallbackRank(currentMovie, candidates);
+                    picks = fallbackRank(currentMovie, candidates, weight);
                     note.innerText = "จัดอันดับจากธีม ประเภทหนัง และยุคสมัยที่ใกล้เคียงกัน";
                 }
 
