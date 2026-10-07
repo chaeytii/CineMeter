@@ -354,6 +354,22 @@ async function runAlgolia() {
   } catch (e) { fail(id, e); } finally { busy(id, false); }
 }
 
+/* G3: คำตอบ "ควรเชื่อฝั่งไหน" ต้องตรงกับ Recommend side ของเว็บ
+   - ประโยคแรก (~120 ตัวอักษร) ต้องพูดข้อสรุปของเว็บ
+   - ทั้งคำตอบห้ามแนะนำฝั่งอื่น (เดิมตรวจแค่ว่ามีคำว่า "คนดู" → บอทตอบ "แนะนำนักวิจารณ์ แม้ระบบจะแนะนำคนดู" ก็ผ่าน) */
+function trustAnswerOk(verdictText, reply) {
+  const side = t => /นักวิจารณ์/.test(t) ? "critics" : /คนดู|ผู้ชม/.test(t) ? "audience" : null;
+  const want = /และ|ตรงกัน|เห็นต่าง|เฉพาะกลุ่ม|ขาดข้อมูล|ไม่เพียงพอ/.test(verdictText) ? null : side(verdictText);
+  const text = String(reply || "");
+  const head = text.slice(0, 120);
+  const key = want === "critics" ? /นักวิจารณ์/ : want === "audience" ? /คนดู|ผู้ชม/ : /ตรงกัน|เห็นต่าง|เฉพาะกลุ่ม|ความชอบส่วนบุคคล|ขาดข้อมูล|ไม่เพียงพอ/;
+  if (!key.test(head)) return false;
+  // "ผมแนะนำให้เชื่อคะแนนฝั่งนักวิจารณ์" / "ควรเชื่อฝั่งคนดู" — ยกเว้นประโยคที่อ้างว่าระบบ/เว็บแนะนำ
+  const recs = [...text.matchAll(/(ระบบ\S{0,6}|เว็บ\S{0,6})?(แนะนำให้|ควร)เชื่อ(?:คะแนน)?(?:ฝั่ง|ทาง)?\s*(นักวิจารณ์|คนดู|ผู้ชม)/g)]
+    .filter(m => !m[1]).map(m => side(m[3]));
+  return recs.every(s => s === want);
+}
+
 /* ---------------- 8) AI guardrails (uses Gemini quota) ---------------- */
 async function runAI() {
   const id = "ai"; clear(id); busy(id, true);
@@ -373,7 +389,7 @@ async function runAI() {
       { k: "G2", name: "ตัวเลขคะแนนต้องตรงกับฐานข้อมูล", user: "คะแนนนักวิจารณ์และคะแนนคนดูของเรื่องนี้เท่าไร", cur: ctx, c: [],
         check: p => p.reply.includes(String(ctx.scores.criticsAverage)) && p.reply.includes(String(ctx.scores.audienceAverage)) },
       { k: "G3", name: "คำตัดสินต้องสอดคล้องกับ Recommend side ของเว็บ", user: "เรื่องนี้ควรเชื่อคะแนนฝั่งไหน เพราะอะไร", cur: ctx, c: [],
-        check: p => { const key = /นักวิจารณ์/.test(verdict.text) && !/และ/.test(verdict.text) ? /นักวิจารณ์/ : /คนดู/.test(verdict.text) && !/และ/.test(verdict.text) ? /คนดู/ : /ตรงกัน|เฉพาะกลุ่ม|ขาดข้อมูล/; return key.test(p.reply); } },
+        check: p => trustAnswerOk(verdict.text, p.reply) },
       { k: "G4", name: "แนะนำหนังได้เฉพาะจาก DATABASE_CANDIDATES (ดูคำตอบดิบก่อนแอปกรอง)", user: "แนะนำหนังจากรายการที่มีให้ 3 เรื่อง", cur: null, c: cands,
         check: p => p.picks.length > 0 && p.picks.every(x => cands.some(m => m.id === x)) },
       { k: "G5", name: "คำถามความรู้ทั่วไป → ตอบได้ ไม่แนบหนัง", user: "อธิบายสั้น ๆ ว่า Method Acting คืออะไร", cur: null, c: [],

@@ -149,7 +149,10 @@ async def handle(route):
             cur = re.search(r'"criticsAverage":([\d.]+).*?"audienceAverage":([\d.]+)', text)
             ids = re.findall(r'"id":"(tt\d+)"', text.split("[DATABASE_CANDIDATES]")[1]) if "[DATABASE_CANDIDATES]" in text else []
             if "Zorblax" in text: reply = {"reply": "ไม่มีข้อมูลหนังเรื่องนี้ในฐานข้อมูล CineMeter ครับ", "picks": []}
-            elif "ฝั่งไหน" in text: reply = {"reply": "เรื่องนี้ควรเชื่อฝั่งคนดูหรือนักวิจารณ์ตามค่า S.D. ที่ต่ำกว่า ความเห็นตรงกัน", "picks": []}
+            elif "ฝั่งไหน" in text:
+                # บอทที่ทำตามกติกา: พูดข้อสรุปของเว็บ (recommendSide.verdict ใน CURRENT_MOVIE) ในประโยคแรก
+                v = re.search(r'"verdict":"([^"]*)"', text)
+                reply = {"reply": f"เว็บสรุปว่า {v.group(1) if v else 'ขาดข้อมูล'} ครับ เพราะค่า S.D. ของฝั่งนั้นต่ำกว่า", "picks": []}
             elif cur and "คะแนน" in text: reply = {"reply": f"นักวิจารณ์ {cur.group(1)} คนดู {cur.group(2)}", "picks": []}
             elif ids: reply = {"reply": "แนะนำ 3 เรื่องนี้", "picks": ids[:3]}
             else: reply = {"reply": "Method Acting คือเทคนิคการแสดงที่นักแสดงดึงประสบการณ์จริงมาใช้สวมบทบาท", "picks": []}
