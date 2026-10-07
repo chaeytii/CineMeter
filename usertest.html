@@ -67,17 +67,25 @@ const STORE_KEY = "cinemeter:usertest:v1";
 // หนัง 2 ชุด ชุดละ 2 เรื่อง — เฉลยข้อ (ก) คือฝั่งที่ S.D. ต่ำกว่า (แหล่งคะแนนให้ใกล้กันกว่า) จากฐานข้อมูลจริง
 const SETS = {
   1: [
-    { id: "tt7069210", title: "The Conjuring: The Devil Made Me Do It", year: 2021, answer: "critics" },
-    { id: "tt0172495", title: "Gladiator", year: 2000, answer: "audience" }
+    { id: "tt13186482", title: "Mufasa: The Lion King", year: 2024, answer: "critics" },
+    { id: "tt7286456", title: "Joker", year: 2019, answer: "audience" }
   ],
   2: [
-    { id: "tt16366836", title: "Venom: The Last Dance", year: 2024, answer: "critics" },
-    { id: "tt0114369", title: "Seven", year: 1995, answer: "audience" }
+    { id: "tt7069210", title: "The Conjuring: The Devil Made Me Do It", year: 2021, answer: "critics" },
+    { id: "tt1825683", title: "Black Panther", year: 2018, answer: "audience" }
   ]
 };
 const METHOD = {
   A: { name: "วิธี A: เปิดเว็บรีวิวเอง", short: "เว็บรีวิวเอง" },
   B: { name: "วิธี B: ใช้ CineMeter", short: "CineMeter" }
+};
+// วิธีดูข้อ (ก) ของแต่ละวิธี — ตัวอย่างใช้เลขสมมติ ไม่ตรงกับหนังเรื่องไหนในแบบทดสอบ
+const HOW_TO = {
+  A: `<b>เว็บรีวิว:</b> แปลงคะแนนเป็นเต็ม 10 แล้วดูว่าสองเว็บในฝั่งเดียวกันต่างกันกี่คะแนน ฝั่งที่ต่างกัน<b>น้อยกว่า</b> = เกาะกลุ่มกว่า
+      <ul><li>นักวิจารณ์: Rotten Tomatoes (Tomatometer %) กับ Metacritic (Metascore เต็ม 100) → หาร 10 ทั้งคู่</li>
+      <li>คนดู: IMDb (เต็ม 10) กับ TMDB (User Score %) → TMDB หาร 10</li></ul>
+      ตัวอย่างสมมติ: RT 90% = 9.0 กับ Metacritic 70 = 7.0 ต่างกัน 2.0 · IMDb 7.5 กับ TMDB 72% = 7.2 ต่างกัน 0.3 → <b>คนดู</b>เกาะกลุ่มกว่า`,
+  B: `<b>CineMeter:</b> เปิดหน้ารายละเอียดของเรื่อง แล้วดูช่อง <b>Recommend side</b> ที่บอกว่า "เชื่อฝั่งนักวิจารณ์" หรือ "เชื่อฝั่งคนดู" — ฝั่งนั้นคือฝั่งที่เกาะกลุ่มกว่า (มาจากค่า S.D. ที่น้อยกว่า ดูตัวเลข S.D. ใต้คะแนนแต่ละฝั่งได้)`
 };
 const SIDE_TH = { critics: "นักวิจารณ์", audience: "คนดู", unsure: "บอกไม่ได้" };
 
@@ -179,10 +187,13 @@ const screens = {
       <ul><li>ช่วงที่ 1: <b>${METHOD[m1].name}</b></li><li>ช่วงที่ 2: <b>${METHOD[m2].name}</b></li></ul>
       <p>แต่ละเรื่องให้กด <b>เริ่มจับเวลา</b> แล้วหาคำตอบ 2 ข้อ:</p>
       <ul>
-        <li><b>(ก)</b> ฝั่งไหนคะแนนเกาะกลุ่มกว่า คือแหล่งคะแนนในฝั่งนั้นให้คะแนนใกล้กันกว่า
-          <div class="muted">ฝั่งนักวิจารณ์ = Rotten Tomatoes (Tomatometer) กับ Metacritic (Metascore) · ฝั่งคนดู = IMDb กับ TMDB · เทียบเป็นคะแนนเต็ม 10 เช่น 56% = 5.6</div></li>
+        <li><b>(ก)</b> ฝั่งไหนคะแนนเกาะกลุ่มกว่า คือแหล่งคะแนนในฝั่งนั้นให้คะแนนใกล้กันกว่า</li>
         <li><b>(ข)</b> จากข้อมูลที่เห็น คุณจะดูเรื่องนี้ไหม</li>
       </ul>
+      <h2>วิธีดูว่าฝั่งไหนเกาะกลุ่มกว่า</h2>
+      <div class="note">${HOW_TO.A}</div>
+      <div class="note" style="margin-top:8px">${HOW_TO.B}</div>
+      <p class="muted">ระหว่างทำ จะมีคำอธิบายของวิธีที่กำลังทำอยู่ใต้ข้อ (ก) ให้ดูอีกครั้ง</p>
       <div class="note">ทำตามปกติ ไม่ต้องรีบ และไม่มีถูกหรือผิดที่เป็นคะแนนของคุณ เราวัดว่าเว็บช่วยได้แค่ไหน</div>
       <div class="actions"><button class="primary" id="next">เริ่มช่วงที่ 1</button></div>`;
   },
@@ -208,6 +219,7 @@ const screens = {
       : `<a class="big" target="_blank" rel="noopener" href="${CINEMETER_URL}">เปิด CineMeter ↗</a>`;
     return `${head}<p class="timer">กำลังจับเวลา <span id="clock">0:00</span></p>${links}
       <p><b>(ก)</b> ฝั่งไหนคะแนนเกาะกลุ่มกว่า</p>
+      <div class="note" style="margin-bottom:8px">${HOW_TO[method]}</div>
       ${radio("side", "critics", "นักวิจารณ์")}${radio("side", "audience", "คนดู")}${radio("side", "unsure", "บอกไม่ได้")}
       <p><b>(ข)</b> คุณจะดูเรื่องนี้ไหม</p>${radio("watch", "yes", "ดู")}${radio("watch", "no", "ไม่ดู")}
       <p>เปิดไปกี่เว็บ (รวมทุกแท็บที่เปิดหาข้อมูลเรื่องนี้)</p>
