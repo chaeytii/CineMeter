@@ -9,7 +9,7 @@ const old = scriptOf(readFileSync(oldPath, "utf8"));
 const NAMES = ["firebaseConfig", "FS_BASE", "FS_TIMEOUT_MS", "DOC_ID", "db", "documentId", "collection", "doc", "where", "orderBy", "limit",
   "startAt", "startAfter", "endAt", "query", "OP_MAP", "toFsValue", "fromFsValue", "fromFsFields", "fieldRef", "makeSnapshot", "fsFetch",
   "cursorValues", "buildStructuredQuery", "getDocs", "getDoc", "GEMINI_PROXY", "GEMINI_PRIMARY_MODEL", "GEMINI_FALLBACK_MODELS", "ALGOLIA",
-  "algoliaReady", "PAGE_SIZE", "ALGOLIA_MAX_FILTER_PAGES", "targetCollection", "collectionResolved", "loadedMovies", "detectValidCollection", "detectGenresArray", "detectLatestYear", "hasClientFilters", "loadSearch", "SD_RULES", "latestYear", "VOTE_KEYS", "POPULARITY_KEYS", "TMDBID_KEYS", "KEYWORD_KEYS", "MEDIATYPE_KEYS",
+  "algoliaReady", "PAGE_SIZE", "ALGOLIA_MAX_FILTER_PAGES", "targetCollection", "collectionResolved", "loadedMovies", "detectValidCollection", "detectGenresArray", "detectLatestYear", "hasClientFilters", "SEARCH_PREFIX_EXTRA", "firestorePrefix", "loadSearch", "SD_RULES", "latestYear", "VOTE_KEYS", "POPULARITY_KEYS", "TMDBID_KEYS", "KEYWORD_KEYS", "MEDIATYPE_KEYS",
   "votesField", "mediaField", "mediaServerFilter", "votesNumeric", "hasPopularityField", "hasScoreFields", "VALUE_LABELS", "GENRE_VARIANTS", "GENRE_CANONICAL",
   "genresArrayReady", "THAI_CHAR", "THAI_TONE_MARKS", "idLooksImdb", "toNum", "toNumOrNull", "pickField", "getVotes", "getPopularity",
   "getMediaType", "isSeries", "getKeywords", "getYear", "formatVotes", "getEnglishTitle", "getThaiTitle", "docToMovie", "randomDocId",
@@ -33,7 +33,7 @@ const SECTIONS = [
   ["ver", "5. Recommend side บนข้อมูลจริง", "รันกติกา Recommend side (โค้ดเดียวกับแอป) กับกลุ่มตัวอย่าง: สัดส่วนคำตัดสิน, กรณีเส้นขอบ, การใช้ค่าระดับประเภทแทน", "ใช้ตัวอย่างเดิม"],
   ["eda", "EDA — สำรวจข้อมูลก่อนวิเคราะห์", "การกระจายคะแนนสองฝั่ง, ช่องห่างคนดู − นักวิจารณ์, ช่องห่างแยกตามประเภท, ข้อมูลที่ขาด, ช่องห่างตามจำนวนโหวต — ดาวน์โหลดกราฟเป็น PNG และข้อมูลเป็น CSV ได้", "ใช้ตัวอย่างเดิม"],
   ["fil", "6. ฟิลเตอร์และ index", "ยิงฟิลเตอร์หลายเงื่อนไขกับฐานจริง ตรวจว่าทุกเรื่องผ่านครบ, ตรวจว่ามี composite index หรือยัง, ตรวจหน้าแรกของการเรียงตามคะแนน", "~700 reads"],
-  ["alg", "7. การค้นหา Algolia", "9 กรณี: ชื่อเต็ม, พิมพ์บางส่วน, พิมพ์ผิด, คำกลางชื่อ, ภาษาไทย, วรรณยุกต์เกิน, จัดอันดับตามโหวต", "9 searches"],
+  ["alg", "7. การค้นหา", "12 กรณี: ชื่อเต็ม, พิมพ์บางส่วน, พิมพ์ผิด, คำกลางชื่อ, ภาษาไทย (กลางชื่อ/ต้นชื่อ), วรรณยุกต์เกิน, จัดอันดับตามโหวต, เรื่องโหวตน้อยที่ไม่อยู่ใน Algolia — เทียบ Algolia อย่างเดียวกับสิ่งที่ผู้ใช้เห็นจริง", "~36 searches"],
   ["ai", "8. AI guardrails (Gemini)", "5 คำถามทดสอบกติกากันแต่งข้อมูลของแชทบอท — ใช้โควตา Gemini 5 ครั้ง จึงไม่รวมในปุ่มรันทั้งหมด", "5 Gemini calls"],
 ];
 

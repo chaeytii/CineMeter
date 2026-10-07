@@ -805,7 +805,9 @@
         // แชทบอทเรียก Gemini ผ่าน Firebase Cloud Function (functions/) ซึ่งเก็บ API key ไว้ฝั่ง server — ในหน้าเว็บจึงไม่มี key
         const GEMINI_PROXY = "https://asia-southeast1-movie-858f6.cloudfunctions.net/gemini";
         const GEMINI_PRIMARY_MODEL = "gemini-3.1-flash-lite";
-        const GEMINI_FALLBACK_MODELS = ["gemini-3.1-flash-lite-preview", "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"];
+        // Gemini 2.0 ปิดไปแล้ว (1 มิ.ย. 2026) และ 2.5 ตอบ 404 → สำรองด้วยรุ่นที่ยังเปิดและใช้แบบฟรีได้ (AI-MODELS-01)
+        const GEMINI_FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite-preview", "gemini-3.6-flash"];
+        const GEMINI_RETRY_MS = 1000;   // Google ตอบ 500/503 (คนใช้เยอะชั่วคราว) → รอแล้วลองรุ่นเดิมอีกครั้งก่อนเปลี่ยนรุ่น
 
         /* ---------------------------------------------------------------
          * ALGOLIA (Full-Text Search)
@@ -3318,7 +3320,9 @@ sameStudio = true คือค่ายผลิตเดียวกับห�
             const models = [geminiModel, ...GEMINI_FALLBACK_MODELS.filter(m => m !== geminiModel)];
             let lastErr = null;
 
-            for (const model of models) {
+            const retried = new Set();
+            for (let i = 0; i < models.length; i++) {
+                const model = models[i];
                 try {
                     const res = await fetch(GEMINI_URL(model), {
                         method: "POST",
@@ -3335,8 +3339,16 @@ sameStudio = true คือค่ายผลิตเดียวกับห�
 
                     if (!res.ok) {
                         lastErr = new Error(`${model}: ${res.status}`);
-                        if (res.status === 404 || res.status === 400) continue;
-                        throw lastErr;
+                        lastErr.status = res.status;
+                        const body = res.status === 429 && res.text ? await res.text().catch(() => "") : "";
+                        // 429 จาก Cloud Function = เกิน 20 ครั้ง/นาที ลองรุ่นอื่นก็โดนเหมือนกัน → หยุดเลย
+                        if (/too many requests/i.test(body)) { lastErr.fatal = true; throw lastErr; }
+                        if ((res.status === 500 || res.status === 503) && !retried.has(model)) {
+                            retried.add(model);
+                            await new Promise(r => setTimeout(r, GEMINI_RETRY_MS));
+                            models.splice(i + 1, 0, model);
+                        }
+                        continue;   // 400/404/429 โควตา/5xx → รุ่นถัดไป (โควตาฟรีนับแยกต่อรุ่น)
                     }
 
                     const data = await res.json();
@@ -3344,6 +3356,7 @@ sameStudio = true คือค่ายผลิตเดียวกับห�
                     const parts = data?.candidates?.[0]?.content?.parts || [];
                     return parts.map(p => p.text || "").join("").trim();
                 } catch (err) {
+                    if (err.fatal) throw err;
                     lastErr = err;
                 }
             }

@@ -218,3 +218,21 @@ test("[AI-CB-15] (edge) ไม่ระบุภาษาและเรื่�
   assert.ok(series.length > 0 && series.every(m => app.isSeries(m)), "กรองซีรีส์ในแผนประเภทเดิมด้วย");
   assert.deepEqual(await app.candidatesFromPlan({ mode: "chat", keyword: "boys' love", language: "th" }, null), []);
 });
+
+// ---------------- รุ่น Gemini ที่ใช้ได้จริง (AI-MODELS-01) ----------------
+import { readFileSync } from "node:fs";
+const appModels = () => [app.GEMINI_PRIMARY_MODEL, ...app.GEMINI_FALLBACK_MODELS];
+
+test("[AI-CB-16] รุ่นสำรองต้องเป็นรุ่นที่ Google ยังเปิดอยู่ (2.0 ปิด 1 มิ.ย. 2026, 2.5 ตอบ 404)", () => {
+  const retired = appModels().filter(m => /^gemini-2\.[05]-/.test(m));
+  assert.deepEqual(retired, [], `รุ่นที่ปิดแล้ว: ${retired.join(", ")}`);
+  assert.equal(app.GEMINI_FALLBACK_MODELS[0], "gemini-3.5-flash-lite", "สำรองตัวแรกต้องเป็น Flash-Lite รุ่นใหม่ (ใช้แบบฟรีได้)");
+  assert.ok(new Set(appModels()).size >= 3, "ต้องมีรุ่นให้สลับอย่างน้อย 3 รุ่น");
+});
+
+test("[AI-CB-17] ทุกรุ่นที่หน้าเว็บเรียก ต้องอยู่ใน ALLOWED_MODELS ของ Cloud Function", () => {
+  const proxy = readFileSync(new URL("../../functions/proxy.js", import.meta.url), "utf8");
+  const allowed = [...proxy.match(/ALLOWED_MODELS = new Set\(\[([\s\S]*?)\]\)/)[1].matchAll(/"([^"]+)"/g)].map(m => m[1]);
+  const missing = appModels().filter(m => !allowed.includes(m));
+  assert.deepEqual(missing, [], `Cloud Function จะตอบ 400 ให้รุ่น: ${missing.join(", ")}`);
+});

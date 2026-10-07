@@ -24,6 +24,7 @@ import datetime as dt
 import gzip
 import json
 import os
+import re
 import sys
 import threading
 
@@ -434,6 +435,12 @@ class AlgoliaClient:
                           {"query": "", "hitsPerPage": 20, "attributesToRetrieve": ["imdbID"]}, read=True)
         return data.get("nbHits", 0), [(h.get("objectID"), h.get("imdbID")) for h in data.get("hits", [])]
 
+    def get_settings(self, index):
+        return self._call("GET", f"/1/indexes/{index}/settings", read=True)
+
+    def set_settings(self, index, settings):
+        return self._call("PUT", f"/1/indexes/{index}/settings", settings).get("taskID")
+
     def batch(self, index, requests_):
         return self._call("POST", f"/1/indexes/{index}/batch", {"requests": requests_}).get("taskID")
 
@@ -452,15 +459,44 @@ class AlgoliaClient:
         raise RuntimeError(f"Algolia task {task_id} ไม่เสร็จภายในเวลา")
 
 
+THAI_TONES = re.compile("[\u0E48-\u0E4B]")                       # ่ ้ ๊ ๋
+THAI_NOT_START = re.compile("[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]")   # สระบน-ล่าง/เครื่องหมาย เริ่มคำไม่ได้
+ALGOLIA_MAX_SUFFIXES = 40
+
+
+def thai_suffixes(title):
+    """ท้ายชื่อไทยทุกตำแหน่ง (ตัดวรรณยุกต์) ให้ Algolia ค้นกลางชื่อได้ เช่น "มหากาพย์โอดิสซี" -> "โอดิสซี"
+    (ภาษาไทยไม่เว้นวรรค Algolia จึงมองทั้งชื่อเป็นคำเดียวและค้นได้แค่ต้นชื่อ)"""
+    t = THAI_TONES.sub("", str(title or "")).strip()
+    if not re.search("[\u0E00-\u0E7F]", t):
+        return []
+    out = []
+    for i in range(1, len(t) - 1):
+        if THAI_NOT_START.match(t[i]) or t[i].isspace():
+            continue
+        out.append(t[i:])
+        if len(out) >= ALGOLIA_MAX_SUFFIXES:
+            break
+    return out
+
+
 def algolia_record(doc_id, data):
     rec = dict(data)
     rec["objectID"] = doc_id
     rec.setdefault("imdbID", doc_id)
+    suffixes = thai_suffixes(rec.get("Title_TH"))
+    if suffixes:
+        rec["Title_TH_suffixes"] = suffixes
+    votes = strict_int(rec.get("imdbVotes"))
+    if votes is not None:
+        rec["imdbVotesNum"] = votes                        # imdbVotes เป็นข้อความ "1,008" ใช้จัดอันดับไม่ได้
     for field in ("Plot", "Keyword"):
         if len(json.dumps(rec, ensure_ascii=False).encode("utf-8")) <= ALGOLIA_MAX_RECORD_BYTES:
             break
         if isinstance(rec.get(field), str):
             rec[field] = rec[field][:300]
+    while rec.get("Title_TH_suffixes") and len(json.dumps(rec, ensure_ascii=False).encode("utf-8")) > ALGOLIA_MAX_RECORD_BYTES:
+        rec["Title_TH_suffixes"] = rec["Title_TH_suffixes"][:-5]   # ยังเกิน: ตัดท้ายสั้น ๆ ที่ค้นน้อยออกก่อน
     return rec
 
 
@@ -468,6 +504,21 @@ def top_by_votes(docs, cap):
     """เรื่องที่โหวต IMDb มากที่สุด ไม่เกิน cap เรื่อง (Algolia แผนฟรีเก็บได้จำกัด)"""
     ranked = sorted(docs, key=lambda k: -(strict_int(docs[k].get("imdbVotes")) or 0))
     return set(ranked[:cap])
+
+
+def ensure_search_settings(client, index, log=print):
+    """ให้ index ค้นท้ายชื่อไทยได้และเรียงเรื่องดังก่อน — เพิ่มเฉพาะที่ขาด ไม่ลบ settings เดิม"""
+    cur = client.get_settings(index) or {}
+    attrs = list(cur.get("searchableAttributes") or [])
+    patch = {}
+    if attrs and not any("Title_TH_suffixes" in a for a in attrs):
+        patch["searchableAttributes"] = attrs + ["unordered(Title_TH_suffixes)"]
+    ranking = list(cur.get("customRanking") or [])
+    if "desc(imdbVotesNum)" not in ranking:
+        patch["customRanking"] = ["desc(imdbVotesNum)"] + [r for r in ranking if "imdbVotes" not in r]
+    if patch:
+        log(f"Algolia: ปรับ settings {patch} (เดิม searchableAttributes={attrs}, customRanking={ranking})")
+        client.wait(index, client.set_settings(index, patch))
 
 
 def sync_algolia(client, store, updates, movies, today, log=print, removed=(), cap=None):
@@ -478,12 +529,15 @@ def sync_algolia(client, store, updates, movies, today, log=print, removed=(), c
     count, sample = client.sample(client.index)
     ids_ok = bool(sample) and all(oid == iid for oid, iid in sample)
     count_ok = expected and abs(count - expected) / expected <= ALGOLIA_COUNT_TOLERANCE
-    if not ids_ok or not count_ok or today.day <= 7:
-        reason = "objectID ไม่ใช่ imdbID" if not ids_ok else ("จำนวนไม่ตรง" if not count_ok else "รอบแรกของเดือน")
+    forced = os.getenv("ALGOLIA_FULL_REBUILD", "").lower() == "true"
+    if forced or not ids_ok or not count_ok or today.day <= 7:
+        reason = ("สั่งจากปุ่ม Run workflow" if forced else "objectID ไม่ใช่ imdbID" if not ids_ok
+                  else "จำนวนไม่ตรง" if not count_ok else "รอบแรกของเดือน")
         log(f"Algolia: แทนที่ทั้ง index ({reason}; Algolia {count:,} / ควรมี {expected:,} จาก Firestore {len(movies):,})")
         tmp = f"{client.index}_tmp"
         client.wait(tmp, client.operation(client.index, {"operation": "copy", "destination": tmp,
                                                          "scope": ["settings", "synonyms", "rules"]}))
+        ensure_search_settings(client, tmp, log)
         docs = store.read_movies(None)
         keep = top_by_votes(docs, cap)
         items = [(k, v) for k, v in docs.items() if k in keep]

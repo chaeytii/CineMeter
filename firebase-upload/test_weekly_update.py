@@ -91,6 +91,11 @@ class FakeAlgolia:
             return FakeResponse({"taskID": len(self.calls)})
         if action == "task":
             return FakeResponse({"status": "published"})
+        if action == "settings":
+            if method == "PUT":
+                idx["settings"].update(body)
+                return FakeResponse({"taskID": len(self.calls)})
+            return FakeResponse(dict(idx["settings"]))
         raise AssertionError(path)
 
 
@@ -377,7 +382,9 @@ class WeeklyUpdateTest(unittest.TestCase):
         main = algolia.indexes[wu.ALGOLIA_INDEX]
         self.assertEqual(set(main["records"]), {"tt0000011", "tt0000012"}, "ต้องไม่มี record เก่าที่ objectID สุ่มค้างอยู่")
         self.assertEqual(main["records"]["tt0000011"]["imdbRating"], "9.0", "ต้องเป็นข้อมูลล่าสุดหลังเขียน Firestore")
-        self.assertEqual(main["settings"], {"searchableAttributes": ["Title_EN"]}, "ต้องเก็บ settings เดิมไว้")
+        self.assertEqual(main["settings"]["searchableAttributes"], ["Title_EN", "unordered(Title_TH_suffixes)"],
+                         "ต้องเก็บ settings เดิมไว้ และเพิ่มท้ายชื่อไทย")
+        self.assertEqual(main["settings"]["customRanking"], ["desc(imdbVotesNum)"])
         self.assertNotIn(wu.ALGOLIA_INDEX + "_tmp", algolia.indexes)
         self.assertEqual((stats["algolia_mode"], stats["algolia_records"]), ("แทนที่ทั้ง index", 2))
 
@@ -408,6 +415,26 @@ class WeeklyUpdateTest(unittest.TestCase):
         self.run_update(FakeStore({"tt0000014": existing()}), ratings_of(tt0000014=("9.0", 50000)), {},
                         FakeApis({}, {}), dry_run=True, algolia=algolia)
         self.assertEqual(algolia.calls, [])
+
+    def test_algolia_record_has_thai_suffixes_and_numeric_votes(self):
+        rec = wu.algolia_record("tt33764258", {"Title_EN": "The Odyssey", "Title_TH": "มหากาพย์โอดิสซี", "imdbVotes": "514,297"})
+        self.assertIn("โอดิสซี", rec["Title_TH_suffixes"], "ต้องค้น \"โอดิส\" กลางชื่อไทยได้")
+        self.assertEqual(rec["imdbVotesNum"], 514297)
+        self.assertFalse(any(x[0] in "\u0E31\u0E34\u0E35\u0E36\u0E37\u0E38\u0E39\u0E4C" for x in rec["Title_TH_suffixes"]),
+                         "ห้ามขึ้นต้นด้วยสระบน-ล่าง")
+        self.assertIn("กลินความรัก", wu.algolia_record("t", {"Title_TH": "หอมกลิ่นความรัก"})["Title_TH_suffixes"], "ตัดวรรณยุกต์")
+        self.assertNotIn("Title_TH_suffixes", wu.algolia_record("t", {"Title_TH": "The Odyssey"}), "ชื่ออังกฤษไม่ต้องมี")
+
+    def test_algolia_full_replace_when_forced(self):
+        movies = {"tt0000015": existing()}
+        algolia = FakeAlgolia({"tt0000015": dict(movies["tt0000015"], imdbID="tt0000015")},
+                              {"searchableAttributes": ["Title_EN", "Title_TH", "unordered(Title_TH_suffixes)"],
+                               "customRanking": ["desc(imdbVotesNum)"]})
+        with mock.patch.dict(os.environ, {"ALGOLIA_FULL_REBUILD": "true"}):
+            stats = self.run_update(FakeStore(movies), ratings_of(tt0000015=("7.0", 10000)), {}, FakeApis({}, {}),
+                                    algolia=algolia, today=dt.date(2026, 10, 12))
+        self.assertEqual(stats["algolia_mode"], "แทนที่ทั้ง index")
+        self.assertFalse([c for c in algolia.calls if c[0] == "PUT"], "settings ครบแล้ว ไม่ต้องแก้")
 
     def test_algolia_record_is_trimmed_when_too_large(self):
         rec = wu.algolia_record("tt1", {"Plot": "ก" * 6000, "Title_EN": "X"})
