@@ -75,7 +75,10 @@ function parseResults(text) {
   // รหัสซ้ำ: ใช้อันหลังสุด
   const byId = new Map();
   rows.forEach(r => { if (byId.has(r.id)) problems.push(`${r.id} ส่งมามากกว่า 1 ครั้ง — ใช้อันล่าสุด`); byId.set(r.id, r); });
-  return { rows: [...byId.values()].sort((x, y) => parseInt(x.id.slice(1)) - parseInt(y.id.slice(1))), problems };
+  // รหัส P เรียงตามเลขก่อน แล้วรหัสสุ่ม (CM-XXXX) เรียงตามตัวอักษร
+  const key = id => /^P\d+$/i.test(id) ? [0, parseInt(id.slice(1), 10), ""] : [1, 0, id];
+  const byKey = (x, y) => { const a = key(x.id), b = key(y.id); return a[0] - b[0] || a[1] - b[1] || a[2].localeCompare(b[2]); };
+  return { rows: [...byId.values()].sort(byKey), problems };
 }
 
 function summarize(rows, { dropSlow = true } = {}) {
@@ -105,8 +108,13 @@ function summarize(rows, { dropSlow = true } = {}) {
   };
   const tA = median(col("A", "sec")), tB = median(col("B", "sec"));
   const fy = people.filter(p => !p.foryou.skipped && Number.isFinite(p.foryou.match));
+  // จำนวนคนต่อลำดับสลับ 4 แบบ (รหัสสุ่มได้แบบแบบสุ่ม จึงอาจไม่เท่ากันพอดี)
+  const orders = { "AB-1": 0, "BA-1": 0, "AB-2": 0, "BA-2": 0 };
+  people.forEach(p => { const k = `${p.order}-${p.setA}`; if (k in orders) orders[k]++; });
+  const counts = Object.values(orders);
+  if (people.length >= 4 && Math.max(...counts) - Math.min(...counts) > 2) notes.push("จำนวนคนต่อลำดับสลับต่างกันเกิน 2 คน — ผลอาจเอนตามลำดับที่ทำ ลองหาผู้ทดลองเพิ่มในแบบที่น้อย");
   return {
-    n: people.length, people, notes,
+    n: people.length, people, notes, orders,
     time: { A: tA, B: tB, reduction: tA && tB !== null ? (tA - tB) / tA * 100 : null },
     sites: { A: median(col("A", "sites")), B: median(col("B", "sites")) },
     correct: { A: pct("A"), B: pct("B") },
@@ -140,6 +148,7 @@ function render(s) {
       ${rows.map(r => `<tr>${r.map((c, i) => `<td class="${i ? "num" : ""}">${esc(c)}</td>`).join("")}</tr>`).join("")}
     </table></div>
     <div class="row"><button class="ghost" id="copyTsv">คัดลอกตาราง (วางใน Sheets/Docs ได้)</button><span class="muted" id="copied"></span></div>
+    <p class="muted">จำนวนคนต่อลำดับสลับ: A ก่อน·ชุด 1 กับ A = ${s.orders["AB-1"]} · B ก่อน·ชุด 1 กับ A = ${s.orders["BA-1"]} · A ก่อน·ชุด 2 กับ A = ${s.orders["AB-2"]} · B ก่อน·ชุด 2 กับ A = ${s.orders["BA-2"]}</p>
     <h2>แถว For you</h2>
     <p>ตรงใจ (1–5): <b>${fmt(s.foryou.match)}</b> · อยากดูใน 6 เรื่องแรก: <b>${fmt(s.foryou.count)}</b> เรื่อง <span class="muted">(ค่ากลาง จาก ${s.foryou.n} คน${s.foryou.skipped ? `, ทำส่วนนี้ไม่ได้ ${s.foryou.skipped} คน` : ""})</span></p>
     <h2>รายคน</h2>
