@@ -3378,17 +3378,42 @@ sameStudio = true คือค่ายผลิตเดียวกับห�
          * ============================================================= */
         const PLAN_SYSTEM = `คุณคือตัวแปลงคำถามเรื่องหนังให้เป็นแผนค้นฐานข้อมูล
 ตอบเป็น JSON เท่านั้น ห้ามมีข้อความอื่น:
-{"mode":"title|genre|top|discovery|similar|current|chat","title":"","genre":"","minVotes":0}
+{"mode":"title|genre|keyword|top|discovery|similar|current|chat","title":"","genre":"","keyword":"","language":"","media":"","minVotes":0}
 ความหมายของ mode:
 - current  = ถามถึงหนังที่ผู้ใช้กำลังเปิดดูอยู่ (เช่น "เรื่องนี้", "this movie", ขอวิเคราะห์/สรุป/ควรดูไหม) ไม่ต้องค้นเพิ่ม
 - similar  = ขอหนังที่คล้าย/แนวเดียวกับหนังที่กำลังเปิดดูอยู่
 - title    = ถามถึงหนังเรื่องอื่นโดยระบุชื่อ (ใส่ชื่อใน title)
-- genre    = ขอหนังตามแนว
+- genre    = ขอหนังตามแนวกว้าง ๆ (ใส่ genre)
+- keyword  = ขอหนังตามหัวข้อหรือกลุ่มเฉพาะที่ไม่ใช่ประเภทหนัง เช่น ซีรีส์วาย/BL, ซอมบี้, ย้อนเวลา, ซูเปอร์ฮีโร่, ชีวิตมหาวิทยาลัย (ใส่ keyword)
 - top      = ขอหนังคะแนนสูงสุด
 - discovery= ขอหนังดีแต่คนรู้จักน้อย
 - chat     = คำถามความรู้ทั่วไปเกี่ยวกับวงการภาพยนตร์ที่ไม่ต้องใช้ข้อมูลในเว็บ
+ช่องเสริม (ใช้กับ genre / keyword / top):
+- keyword  = keyword ภาษาอังกฤษตัวพิมพ์เล็กแบบที่ TMDB ใช้ ใส่ได้หลายคำคั่นด้วย , (ตรงคำใดคำหนึ่งก็พอ) เช่น "boys' love, gay theme", "zombie", "time travel", "superhero"
+- language = รหัสภาษา ISO 639-1 เมื่อผู้ใช้ระบุประเทศ/ภาษา หรือหัวข้อนั้นมาจากประเทศเดียวเป็นหลัก เช่น ไทย = th, เกาหลี/K-drama = ko, ญี่ปุ่น/อนิเมะ = ja, จีน = zh, ฝรั่ง = en, ซีรีส์วาย/BL ที่ไม่ระบุประเทศ = th; ไม่เกี่ยว = ""
+- media    = "series" เมื่อขอซีรีส์, "movie" เมื่อขอหนัง/ภาพยนตร์, ไม่ระบุ = ""
+บทสนทนาก่อนหน้า (HISTORY):
+- คำถามต่อเนื่อง เช่น "ขออีก", "แบบเกาหลีบ้าง", "แล้วที่เป็นหนังล่ะ" ให้คง mode / genre / keyword / language / media จาก HISTORY แล้วเปลี่ยนเฉพาะส่วนที่ผู้ใช้ขอใหม่
+- "เรื่องแรก", "เรื่องที่สอง" ฯลฯ = เรื่องตามลำดับใน [แนะนำ: ...] ของบอทข้อความล่าสุด ให้ตอบ mode title พร้อมชื่อเรื่องนั้น
+- คำถามที่พูดถึงหนังเรื่องอื่นหรือหัวข้ออื่นชัดเจน ไม่ต้องยึด CURRENT_MOVIE
 ถ้า CURRENT_MOVIE เป็น none ห้ามตอบ current หรือ similar
 genre ให้เลือกจาก: action, drama, scifi, comedy, horror, animation, thriller, adventure, fantasy, crime, romance, mystery, family, war, history, music, documentary, western, reality`;
+
+        // ประวัติแชทที่ส่งให้ขั้นวางแผนค้นหา (CHAT-02): 4 ข้อความล่าสุด ตัดให้สั้น + ชื่อเรื่องที่บอทแนะนำ
+        const PLAN_HISTORY = 4;
+        function planHistoryText(history) {
+            return (history || []).slice(-PLAN_HISTORY).map(h => {
+                const text = String(h.text || "").replace(/\s+/g, " ").slice(0, 240);
+                const picks = h.picks && h.picks.length ? ` [แนะนำ: ${h.picks.join(", ")}]` : "";
+                return `${h.role === "user" ? "ผู้ใช้" : "บอท"}: ${text}${picks}`;
+            }).join("\n");
+        }
+
+        // ข้อความของบอทที่เก็บในประวัติ + ชื่อเรื่องบนการ์ดที่แนะนำ (คำถาม "เรื่องที่สอง" จะได้รู้ว่าหมายถึงเรื่องไหน)
+        function modelTurn(reply) {
+            const picks = (reply.movies || []).map(m => `${getEnglishTitle(m)}${m.Year ? ` (${m.Year})` : ""}`);
+            return picks.length ? { role: "model", text: reply.text, picks } : { role: "model", text: reply.text };
+        }
 
         // System Prompt หลักของบอท: ผู้เชี่ยวชาญภาพยนตร์ ตอบคำถามกว้าง ๆ ได้ + วิเคราะห์หนังที่เปิดอยู่ได้ตรงจุด
         const CHAT_SYSTEM_PROMPT = `คุณคือ "CineMeter Assistant" ผู้เชี่ยวชาญด้านภาพยนตร์และซีรีส์ระดับนักวิจารณ์มืออาชีพ
@@ -3498,6 +3523,7 @@ genre ให้เลือกจาก: action, drama, scifi, comedy, horror, a
                 overallSD: toNumOrNull(m.Overall_SD),
                 recommendSide: m.Recommended_Trust_Side || null,
                 votes: getVotes(m) || null,
+                language: getLanguage(m) || null,
                 keywords: getKeywords(m).slice(0, 8),
                 plot: m.Plot ? String(m.Plot).slice(0, 180) : null
             };
@@ -3520,11 +3546,12 @@ genre ให้เลือกจาก: action, drama, scifi, comedy, horror, a
             const turns = [];
             history.forEach(h => {
                 const role = h.role === "user" ? "user" : "model";
+                const text = h.picks && h.picks.length ? `${h.text}\n[แนะนำ: ${h.picks.join(", ")}]` : h.text;
                 if (!turns.length && role !== "user") return;
                 if (turns.length && turns[turns.length - 1].role === role) {
-                    turns[turns.length - 1].parts[0].text += "\n" + h.text;
+                    turns[turns.length - 1].parts[0].text += "\n" + text;
                 } else {
-                    turns.push({ role, parts: [{ text: h.text }] });
+                    turns.push({ role, parts: [{ text }] });
                 }
             });
             if (turns.length && turns[turns.length - 1].role === "user") turns.pop();
@@ -3535,6 +3562,66 @@ genre ให้เลือกจาก: action, drama, scifi, comedy, horror, a
             };
         }
 
+        // ค้นตาม keyword / ภาษา / หนัง-ซีรีส์ ที่ขั้นวางแผนกรอกมา (CHAT-02)
+        // Firestore ค้นใน keyword ไม่ได้ → ดึงเรื่องดังของภาษานั้น (หรือประเภทนั้น / ทั้งฐาน) มา 150 เรื่องแล้วกรองในเครื่อง
+        const CHAT_TASTE_POOL = 150;
+        const CHAT_TASTE_MIN = 5;                    // ตรง keyword น้อยกว่านี้ → ค้นเพิ่มในภาษาด้านล่าง
+        const CHAT_TASTE_LANGS = ["th", "ko", "ja", "zh"];
+        const CHAT_TASTE_PER_LANG = 60;
+        function normKeyword(s) { return String(s || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim(); }
+        function keywordMatcher(raw) {
+            const wants = String(raw || "").split(",").map(normKeyword).filter(Boolean);
+            if (!wants.length) return null;
+            // เทียบทั้งคำ: "bl" ตรงกับ "boys' love (bl)" แต่ไม่ตรงกับ "blood"
+            return m => getKeywords(m).some(k => {
+                const have = ` ${normKeyword(k)} `;
+                return wants.some(w => have.includes(` ${w} `));
+            });
+        }
+        function mediaWanted(plan) {
+            return plan.media === "series" ? true : plan.media === "movie" ? false : null;
+        }
+
+        async function candidatesByTaste(plan) {
+            const lang = String(plan.language || "").trim().toLowerCase();
+            const genre = GENRE_MAP[plan.genre] || "";
+            const byKeyword = keywordMatcher(plan.keyword);
+            const series = mediaWanted(plan);
+            let snap;
+            if (lang) {
+                snap = await runQuerySafe(
+                    [where("Language", "==", lang), orderBy("Popularity", "desc"), limit(CHAT_TASTE_POOL)],
+                    [where("Language", "==", lang), limit(CHAT_TASTE_POOL)]
+                );
+            } else if (genre) {
+                snap = await runQuerySafe(
+                    [genreWhere(genre), orderBy("Popularity", "desc"), limit(CHAT_TASTE_POOL)],
+                    [genreWhere(genre), limit(CHAT_TASTE_POOL)]
+                );
+            } else {
+                snap = await runQuerySafe([orderBy("Popularity", "desc"), limit(CHAT_TASTE_POOL)], [limit(CHAT_TASTE_POOL)]);
+            }
+            let out = snap.docs.map(docToMovie)
+                .filter(m => (!lang || getLanguage(m) === lang) && (!lang || !genre || matchesGenre(m, genre))
+                    && (series === null || isSeries(m) === series));
+            if (byKeyword) {
+                let hit = out.filter(byKeyword);
+                // ไม่ระบุภาษาและเรื่องดังทั้งฐานตรง keyword น้อย (เช่น BL) → ดูเรื่องดังของภาษาเอเชียที่มีซีรีส์เฉพาะกลุ่มเยอะเพิ่ม
+                if (!lang && hit.length < CHAT_TASTE_MIN) {
+                    const more = await Promise.all(CHAT_TASTE_LANGS.map(l => runQuerySafe(
+                        [where("Language", "==", l), orderBy("Popularity", "desc"), limit(CHAT_TASTE_PER_LANG)],
+                        [where("Language", "==", l), limit(CHAT_TASTE_PER_LANG)]
+                    ).then(r => r.docs.map(docToMovie)).catch(() => [])));
+                    const seen = new Set(hit.map(m => m.id));
+                    more.flat().filter(m => !seen.has(m.id) && byKeyword(m) && (!genre || matchesGenre(m, genre))
+                        && (series === null || isSeries(m) === series)).forEach(m => { seen.add(m.id); hit.push(m); });
+                }
+                out = hit.length ? hit : (lang ? out : []);   // ไม่มีเรื่องตรง keyword: มีภาษา → ใช้เรื่องภาษานั้น, ไม่มี → ไปใช้แผนเดิม
+            }
+            if (plan.mode === "top") out.sort((a, b) => toNum(b.Audience_Average) - toNum(a.Audience_Average));
+            return out;
+        }
+
         async function candidatesFromPlan(plan, currentMovieObj) {
             await detectValidCollection();
             const col = collection(db, targetCollection);
@@ -3543,15 +3630,20 @@ genre ให้เลือกจาก: action, drama, scifi, comedy, horror, a
 
             try {
                 if (plan.mode === "similar" && currentMovieObj) {
-                    const pool = await buildCandidatePool(currentMovieObj);
+                    const pool = keepFamiliar(currentMovieObj, await similarPool(currentMovieObj));   // ตัวเดียวกับ More like this (SIM-03)
+                    const weight = keywordWeights([...pool, currentMovieObj]);
                     docs = pool
-                        .map(m => ({ m, s: preScore(currentMovieObj, m) }))
+                        .map(m => ({ m, s: preScore(currentMovieObj, m, weight) }))
                         .sort((a, b) => b.s - a.s)
                         .slice(0, 15)
                         .map(x => x.m);
                 }
 
                 if (!docs.length && plan.mode === "title" && plan.title) docs = await searchByTitle(plan.title);
+
+                if (!docs.length && (plan.keyword || plan.language) && ["genre", "keyword", "top"].includes(plan.mode)) {
+                    docs = await candidatesByTaste(plan);
+                }
 
                 if (!docs.length && plan.mode === "genre" && plan.genre && GENRE_MAP[plan.genre]) {
                     const snap = await runQuerySafe(
@@ -3581,6 +3673,8 @@ genre ให้เลือกจาก: action, drama, scifi, comedy, horror, a
             } catch (err) { console.warn(err); }
 
             if (currentMovieObj) docs = docs.filter(m => m.id !== currentMovieObj.id);
+            const series = mediaWanted(plan);
+            if (series !== null && docs.some(m => isSeries(m) === series)) docs = docs.filter(m => isSeries(m) === series);
             if (plan.minVotes) docs = docs.filter(m => getVotes(m) >= toNum(plan.minVotes));
             return docs.slice(0, 20);
         }
@@ -3605,8 +3699,9 @@ genre ให้เลือกจาก: action, drama, scifi, comedy, horror, a
                 const planRaw = await callGemini({
                     system: PLAN_SYSTEM,
                     contents: [{ role: "user", parts: [{ text:
-                        `CURRENT_MOVIE: ${currentCtx ? `${currentCtx.title} (${currentCtx.year || "?"})` : "none"}\nคำถาม: ${userText}` }] }],
-                    json: true, temperature: 0.1, maxTokens: 300
+                        `CURRENT_MOVIE: ${currentCtx ? `${currentCtx.title} (${currentCtx.year || "?"})` : "none"}\n` +
+                        `HISTORY:\n${planHistoryText(history) || "(ไม่มี)"}\nคำถาม: ${userText}` }] }],
+                    json: true, temperature: 0.1, maxTokens: 400
                 });
                 plan = parseJsonLoose(planRaw) || plan;
             } catch (e) { }
@@ -3758,7 +3853,7 @@ genre ให้เลือกจาก: action, drama, scifi, comedy, horror, a
                 }
                 typing.remove();
                 addChatMessage("bot", reply.text, reply.movies);
-                chatHistory.push({ role: "model", text: reply.text });
+                chatHistory.push(modelTurn(reply));
             } catch (err) {
                 typing.remove();
                 addChatMessage("bot", "ค้นหาไม่สำเร็จ ลองใหม่อีกครั้งนะครับ");
