@@ -181,4 +181,8 @@ async def main():
         print("requests:", STATS)
         print(summary)
         await b.close()
+        # ฟังก์ชันของแอปที่ลืมคัดลอกเข้าหน้าตรวจ (build-check-page.mjs NAMES) จะโผล่เป็น "... is not defined"
+        missing = re.findall(r"(\w+) is not defined", summary + " ".join(errs_in_page))
+        if missing:
+            sys.exit(f"missing app declarations in check page: {sorted(set(missing))}")
 asyncio.run(main())
