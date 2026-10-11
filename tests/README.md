@@ -14,7 +14,9 @@ cd tests
 python3 make-v7_9.py ../cinemeter-v7_8.html ../cinemeter-v7_9.html   # สร้าง v7_9 จาก v7_8 ใหม่ (แก้ 9 จุด + ย้าย Gemini key ไป Cloud Function 3 จุด + จัดอันดับแบบถ่วงโหวต 8 จุด)
 ```
 
-ผลอยู่ใน `results/`: `*-spec.txt` (อ่านง่าย + coverage), `*-junit.xml`, `test-table.md`, ภาพ smoke test
+บน Windows ให้รันใน Git Bash หรือ WSL (PowerShell/CMD รันไฟล์ `.sh` ไม่ได้) จบแต่ละรอบสคริปต์จะพิมพ์สรุป `tests / pass / fail` ขึ้นจอ
+
+ผลอยู่ใน `results/`: `*-spec.txt` (อ่านง่าย + coverage), `*-junit.xml`, `test-table.md`, ภาพ smoke test — การรันจะเขียนทับไฟล์ผลที่บันทึกไว้ ถ้าไม่ต้องการเก็บให้ `git restore tests/results`
 
 ## ไฟล์
 
