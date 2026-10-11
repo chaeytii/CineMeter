@@ -133,7 +133,7 @@ async function runCompleteness() {
   } catch (e) { fail(id, e); } finally { busy(id, false); }
 }
 
-/* ---------------- 3) GENRE_ANALYSIS -> Objective 1 ---------------- */
+/* ---------------- 3) GENRE_ANALYSIS -> EDA by genre ---------------- */
 async function runGenres() {
   const id = "gen"; clear(id); busy(id, true);
   try {
@@ -153,7 +153,7 @@ async function runGenres() {
       esc(r.g), f2(r.critics), f2(r.audience), f2(r.sdDiff), esc(r.side), `${r.nBoth}/${r.n}`, r.gapAbs ? `<b>${f2(r.gapAbs.mean)}</b>` : "—", r.gapSigned ? f2(r.gapSigned.mean) : "—"])));
     const topGap = rows.find(r => r.gapAbs && r.nBoth >= 20);
     const topSD = rows.filter(r => r.sdDiff !== null).sort((a, b) => b.sdDiff - a.sdDiff)[0];
-    put(id, `<p class="answer">คำตอบวัตถุประสงค์ข้อ 1 (กลางภาค): ประเภทที่คะแนนนักวิจารณ์กับคนดูต่างกันมากที่สุดโดยเฉลี่ยคือ <b>${esc(topGap?.g || "—")}</b> (ต่างเฉลี่ย ${f2(topGap?.gapAbs?.mean)} คะแนนจาก 10, n=${topGap?.nBoth ?? 0})
+    put(id, `<p class="answer">ผลวิเคราะห์ตามประเภท (ข้อมูลประกอบ EDA): ประเภทที่คะแนนนักวิจารณ์กับคนดูต่างกันมากที่สุดโดยเฉลี่ยคือ <b>${esc(topGap?.g || "—")}</b> (ต่างเฉลี่ย ${f2(topGap?.gapAbs?.mean)} คะแนนจาก 10, n=${topGap?.nBoth ?? 0})
       · ประเภทที่ S.D. สองฝั่งต่างกันมากที่สุดคือ <b>${esc(topSD?.g || "—")}</b> (|Δ S.D.| = ${f2(topSD?.sdDiff)})</p>
       <p class="note">ช่องว่างคะแนนคิดจากตัวอย่างสูงสุดประเภทละ ${+$("#genreN").value || 100} เรื่อง (ยิ่งมาก ยิ่งแม่น แต่ใช้ reads มากขึ้น)</p>`);
     R.genres = { rows: rows.map(r => ({ genre: r.g, criticsSD: r.critics, audienceSD: r.audience, sdDiff: r.sdDiff, trustSide: r.side, sample: r.nBoth, meanAbsGap: r.gapAbs?.mean ?? null, meanSignedGap: r.gapSigned?.mean ?? null, medMovieCriticsSD: r.cSD?.median ?? null, medMovieAudienceSD: r.aSD?.median ?? null })),
@@ -547,7 +547,7 @@ function mdSummary() {
     `- ข้อมูลขาด: ${e.missing.map(r => `${r.label} ${f2(r.value, 1)}%`).join(", ")}`,
     `- |ช่องห่าง| ตามโหวต: ${e.votes.map(v => `${v.label} ${f2(v.value)} (n=${v.n})`).join(", ")}`, ``); }
   if (R.latency) { const l = R.latency; L.push(`## ความเร็ว (ms)`, `- Firestore โหลด 40 เรื่อง: มัธยฐาน ${f2(l.firestoreList?.median, 0)}, p95 ${f2(l.firestoreList?.p95, 0)} (ครั้งแรก ${f2(l.firestoreListCold, 0)})`, `- Firestore เปิด 1 เรื่อง: มัธยฐาน ${f2(l.firestoreDoc?.median, 0)}`, `- Algolia ค้นหา: มัธยฐาน ${f2(l.algolia?.median, 0)}, p95 ${f2(l.algolia?.p95, 0)} (ครั้งแรก ${f2(l.algoliaCold, 0)})`, ``); }
-  if (R.genres) { const g = R.genres; L.push(`## ประเภทที่ความเห็นต่างกันมากที่สุด (วัตถุประสงค์ข้อ 1)`, `- ช่องว่างคะแนนเฉลี่ยสูงสุด: **${g.topByGap}** (${f2(g.topByGapValue)} คะแนน)`, `- |Δ S.D.| สูงสุด: **${g.topBySD}** (${f2(g.topBySDValue)})`, ``, `| ประเภท | Critics SD | Audience SD | |Δ| | ช่องว่างเฉลี่ย | ตัวอย่าง |`, `|---|---:|---:|---:|---:|---:|`);
+  if (R.genres) { const g = R.genres; L.push(`## ประเภทที่ความเห็นต่างกันมากที่สุด (ข้อมูลประกอบ EDA)`, `- ช่องว่างคะแนนเฉลี่ยสูงสุด: **${g.topByGap}** (${f2(g.topByGapValue)} คะแนน)`, `- |Δ S.D.| สูงสุด: **${g.topBySD}** (${f2(g.topBySDValue)})`, ``, `| ประเภท | Critics SD | Audience SD | |Δ| | ช่องว่างเฉลี่ย | ตัวอย่าง |`, `|---|---:|---:|---:|---:|---:|`);
     g.rows.forEach(r => L.push(`| ${r.genre} | ${f2(r.criticsSD)} | ${f2(r.audienceSD)} | ${f2(r.sdDiff)} | ${f2(r.meanAbsGap)} | ${r.sample} |`)); L.push(``); }
   if (R.recompute) { L.push(`## คำนวณซ้ำเพื่อตรวจย้อนกลับ (สุ่ม ${R.recompute.sample} เรื่อง)`, `| ค่า | เทียบได้ | ตรง (สูตรหลัก) | ตรง (สูตรรอง) |`, `|---|---:|---:|---:|`);
     Object.entries(R.recompute.metrics).forEach(([k, v]) => L.push(k.endsWith("Average") ? `| ${k} | ${v.n} | ${v.match} (สเกล 10) | ${v.match100} (สเกล 100) |` : `| ${k} | ${v.n} | ${v.matchPop} (÷n) | ${v.matchSample} (÷n−1) |`)); L.push(``); }
