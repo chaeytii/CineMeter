@@ -11,3 +11,8 @@ node --test --experimental-test-coverage --test-coverage-include="cinemeter-logi
   --test-reporter=spec --test-reporter-destination=results/$V-spec.txt \
   --test-reporter=junit --test-reporter-destination=results/$V-junit.xml \
   test/*.test.mjs
+status=$?
+# Print the pass/fail summary on screen; the full report and coverage stay in results/
+echo "== cinemeter-$V.html =="
+grep -E "^ℹ (tests|pass|fail)" results/$V-spec.txt
+exit $status

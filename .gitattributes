@@ -1,0 +1,2 @@
+# Keep shell scripts LF so tests/run-tests.sh runs in Git Bash/WSL on Windows
+*.sh text eol=lf
